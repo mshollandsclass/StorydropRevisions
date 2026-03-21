@@ -432,39 +432,15 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
       <div class="btn-row">
         <button class="btn btn-ghost btn-sm" id="pres-prev-btn" onclick="presNav(-1)">&#x2190; Prev</button>
         <button class="btn btn-secondary btn-sm" id="pres-next-btn" onclick="presNav(1)">Next &#x2192;</button>
-        <button class="btn btn-primary btn-sm" id="pres-vote-btn" onclick="openClassVote()" style="display:none">Open Class Vote &#x25BA;</button>
-        <button class="btn btn-danger btn-sm" id="pres-results-btn" onclick="showClassResults()" style="display:none">&#x2605; Show Winner</button>
       </div>
     </div>
-    <div class="class-vote-bar" id="pres-vote-bar" style="display:none">
-      <div>
-        <div style="font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);margin-bottom:3px">Class Votes</div>
-        <div class="vote-tally" id="pres-tally">Waiting…</div>
-      </div>
-      <button class="btn btn-danger btn-sm" onclick="closeClassVote()">Close Voting</button>
-    </div>
+
     <div class="present-story" id="pres-story"></div>
     <div id="pres-scores" style="margin-top:16px"></div>
   </div>
 </div>
 
-<!-- ══════════ CLASS VOTE (STUDENT) ══════════ -->
-<div class="view" id="v-class-vote">
-  <div class="hdr" style="max-width:780px;width:100%">
-    <div class="logo">STORY<br><span>DROP</span></div>
-    <div class="hdr-meta">Class Vote</div>
-  </div>
-  <div class="content">
-    <div class="label">Vote for the best group story</div>
-    <p class="text-muted" style="margin-bottom:20px;line-height:1.7">Your teacher is presenting each group's story on the main screen. Vote for your favourite — you cannot vote for your own group.</p>
-    <div class="vote-list" id="cv-list"></div>
-    <input type="hidden" id="cv-sessionkey">
-    <div class="btn-row">
-      <button class="btn btn-primary btn-lg" onclick="submitClassVote()">Cast Vote &#x2192;</button>
-      <span class="text-muted" id="cv-status"></span>
-    </div>
-  </div>
-</div>
+
 
 <!-- ══════════ STUDENT JOIN ══════════ -->
 <div class="view" id="v-student-join">
@@ -1215,12 +1191,7 @@ async function studentPoll() {
     if (phase === 'ai' && curView !== 'v-ai') startAIPhase(g);
     if (phase === 'round_results' && curView !== 'v-round-results') showRoundResults(g);
   }
-  if (g.status === 'done') { if (curView !== 'v-final' && curView !== 'v-class-vote') showFinal(g); }
-  if (g.status === 'done' || g.status === 'playing') {
-    const sessionKey = `sd_classvote_${g.sessionId}`;
-    const vs = await sget(sessionKey);
-    if (vs && vs.open && curView !== 'v-class-vote') { renderClassVoteView(vs, sessionKey); showView('v-class-vote'); }
-  }
+  if (g.status === 'done') { if (curView !== 'v-final') showFinal(g); }
 }
 
 // ══════════════════════════════════════════════
@@ -1461,8 +1432,8 @@ async function startGroupGame(code) {
 // ══════════════════════════════════════════════
 //  PRESENTATION MODE
 // ══════════════════════════════════════════════
-let presGroups = [], presIdx = 0, presVotingOpen = false;
-let presClassVotePollTimer = null, presSessionKey = '';
+let presGroups = [], presIdx = 0;
+let presSessionKey = '';
 
 async function launchPresentation() {
   const session = await sget(`sd_session_${teacherSessionId}`);
@@ -1471,7 +1442,6 @@ async function launchPresentation() {
   for (const code of session.codes) { const g = await sget(`sd_group_${code}`); if (g && g.status === 'done' && g.results) presGroups.push(g); }
   if (presGroups.length === 0) { toast('No completed groups yet', true); return; }
   presSessionKey = `sd_classvote_${teacherSessionId}`;
-  await sset(presSessionKey, { open: false, votes: {}, currentGroup: null });
   presIdx = 0; renderPresentation(); showView('v-present');
   clearInterval(dashPollTimer);
 }
@@ -1494,80 +1464,9 @@ function renderPresentation() {
   document.getElementById('pres-prev-btn').style.display = presIdx === 0 ? 'none' : '';
   document.getElementById('pres-next-btn').textContent = presIdx < presGroups.length - 1 ? 'Next →' : 'All shown';
   document.getElementById('pres-next-btn').disabled = presIdx >= presGroups.length - 1;
-  const isLast = presIdx === presGroups.length - 1;
-  document.getElementById('pres-vote-btn').style.display = isLast && !presVotingOpen ? 'inline-flex' : 'none';
-  document.getElementById('pres-results-btn').style.display = presVotingOpen ? 'inline-flex' : 'none';
 }
 
 function presNav(dir) { presIdx = Math.max(0, Math.min(presGroups.length-1, presIdx+dir)); renderPresentation(); }
-
-async function openClassVote() {
-  presVotingOpen = true;
-  await sset(presSessionKey, { open: true, votes: {}, groups: presGroups.map(g=>g.code), sessionId: teacherSessionId });
-  document.getElementById('pres-vote-bar').style.display = 'flex';
-  document.getElementById('pres-vote-btn').style.display = 'none';
-  document.getElementById('pres-results-btn').style.display = 'inline-flex';
-  toast('Class voting is open!');
-  presClassVotePollTimer = setInterval(pollClassVotes, 2000);
-  pollClassVotes();
-}
-
-async function pollClassVotes() {
-  const vs = await sget(presSessionKey);
-  if (!vs) return;
-  const tally = {};
-  Object.values(vs.votes||{}).forEach(code => { tally[code] = (tally[code]||0)+1; });
-  const total = Object.values(tally).reduce((a,b)=>a+b,0);
-  document.getElementById('pres-tally').innerHTML = presGroups.map(g => `<span class="vote-tally-chip">${g.code}: ${tally[g.code]||0}</span>`).join('<span style="color:var(--border);margin:0 4px">·</span>') + `<span style="font-size:1rem;color:var(--text2);margin-left:8px">(${total} total)</span>`;
-}
-
-async function closeClassVote() {
-  const vs = await sget(presSessionKey);
-  if (vs) { vs.open = false; await sset(presSessionKey, vs); }
-  presVotingOpen = false; clearInterval(presClassVotePollTimer);
-  document.getElementById('pres-vote-bar').style.display = 'none';
-}
-
-async function showClassResults() {
-  clearInterval(presClassVotePollTimer);
-  const vs = await sget(presSessionKey);
-  const votes = (vs&&vs.votes)||{};
-  const tally = {};
-  presGroups.forEach(g => tally[g.code]=0);
-  Object.values(votes).forEach(code => { if (tally[code]!==undefined) tally[code]++; });
-  const sorted = presGroups.map(g => ({ code:g.code, players:g.players, votes:tally[g.code]||0 })).sort((a,b)=>b.votes-a.votes);
-  const winner = sorted[0];
-  document.getElementById('pres-story').innerHTML = `<div class="class-winner-reveal"><div class="class-winner-crown">${winner.code}</div><div class="class-winner-label">wins with ${winner.votes} vote${winner.votes!==1?'s':''} — ${winner.players.join(', ')}</div><div class="results-podium">${sorted.map((r,i)=>`<div class="podium-row ${i===0?'first':''}"><div><div class="podium-code">${r.code}</div><div class="podium-label">${r.players.join(', ')}</div></div><div><div class="podium-votes">${r.votes}</div><div class="podium-label">vote${r.votes!==1?'s':''}</div></div></div>`).join('')}</div><div style="margin-top:28px"><button class="btn btn-ghost btn-md" onclick="presIdx=0;renderPresentation()">← Back to Stories</button><button class="btn btn-secondary btn-md" onclick="showView('v-teacher-dash');startTeacherDash(teacherSessionId,presGroups.map(g=>g.code))" style="margin-left:10px">Dashboard</button></div></div>`;
-  document.getElementById('pres-scores').innerHTML = '';
-}
-
-// ══════════════════════════════════════════════
-//  CLASS VOTE (STUDENT)
-// ══════════════════════════════════════════════
-let myClassVote = null;
-
-function renderClassVoteView(vs, sessionKey) {
-  const groups = vs.groups || [];
-  myClassVote = null;
-  document.getElementById('cv-list').innerHTML = groups.map(code => `<div class="vote-card" data-code="${code}" onclick="selectClassVote(this)"><div class="vote-letter">◈</div><div class="vote-body"><div class="vote-author">Group ${code}</div><div class="vote-txt" style="font-size:1rem;color:var(--text2)">Tap to vote for this group's story</div></div></div>`).join('');
-  document.getElementById('cv-status').textContent = '';
-  document.getElementById('cv-sessionkey').value = sessionKey;
-}
-
-function selectClassVote(el) { document.querySelectorAll('#cv-list .vote-card').forEach(v => v.classList.remove('sel')); el.classList.add('sel'); myClassVote = el.dataset.code; }
-
-async function submitClassVote() {
-  if (!myClassVote) { toast('Pick a group first!', true); return; }
-  const sessionKey = document.getElementById('cv-sessionkey').value;
-  const vs = await sget(sessionKey);
-  if (!vs || !vs.open) { toast('Voting is closed', true); return; }
-  if (myClassVote === me.groupCode) { toast("You can't vote for your own group!", true); return; }
-  vs.votes[me.name + '_' + me.groupCode] = myClassVote;
-  await sset(sessionKey, vs);
-  document.getElementById('cv-status').textContent = '✓ Vote submitted!';
-  document.querySelectorAll('#cv-list .vote-card').forEach(v => v.style.pointerEvents = 'none');
-  toast('Vote cast!');
-}
 
 // ══════════════════════════════════════════════
 //  LICENSE
