@@ -1194,15 +1194,10 @@ async function studentPoll() {
   if (g.status === 'playing') {
     const isMyTurn = g.players[g.currentPlayerIdx] === me.name;
     const phase = g.phase || 'write';
-    // If player is still in lobby, move them along
-    if (curView === 'v-lobby' || curView === 'v-rules') {
-      if (phase === 'write' && isMyTurn) { startWriteTurn(g); return; }
-      if (phase === 'write' && !isMyTurn) { showView('v-wait'); document.getElementById('wait-code').textContent = me.groupCode; document.getElementById('wait-msg').textContent = `Waiting for ${g.players[g.currentPlayerIdx]} to write…`; return; }
-    }
+    const alreadySubmitted = (g.roundContribs||[]).some(c => c.playerName === me.name && c.round === g.currentRound);
     if (phase === 'write') {
-      const alreadySubmitted = (g.roundContribs||[]).some(c => c.playerName === me.name && c.round === g.currentRound);
-      if (isMyTurn && !alreadySubmitted && curView !== 'v-write') { startWriteTurn(g); }
-      else if (!isMyTurn || alreadySubmitted) {
+      if (isMyTurn && !alreadySubmitted && curView !== 'v-write') { startWriteTurn(g); return; }
+      if (!isMyTurn || alreadySubmitted) {
         document.getElementById('wait-code').textContent = me.groupCode;
         document.getElementById('wait-msg').textContent = alreadySubmitted ? 'Waiting for other players to finish writing…' : `Waiting for ${g.players[g.currentPlayerIdx]} to write…`;
         const submitted = (g.roundContribs||[]).map(c=>c.playerName);
