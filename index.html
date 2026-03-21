@@ -389,8 +389,9 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
 
     <hr>
     <div class="btn-row">
-      <button class="btn btn-primary btn-lg" onclick="createSession()">Create Session &amp; Get Codes &#x2192;</button>
-      <button class="btn btn-secondary btn-md" onclick="showView('v-landing')">&#x2190; Back</button>
+      <button class="btn btn-secondary btn-md" onclick="saveSetupSession()">&#x2713; Save</button>
+      <button class="btn btn-primary btn-lg" onclick="createSession()">Start &#x2192;</button>
+      <button class="btn btn-ghost btn-md" onclick="showView('v-landing')">&#x2190; Back</button>
     </div>
   </div>
 </div>
@@ -978,7 +979,7 @@ async function saveReport(sessionId, sessionName, groups) {
 async function loadReports() {
   try {
     const licenseKey = localStorage.getItem('storydrop_license');
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/store?key=like.sd_report_${licenseKey}_%&select=key,value`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }});
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/store?key=like.sd_report_${licenseKey}_*&select=key,value`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }});
     if (!res.ok) return [];
     const rows = await res.json();
     return rows.map(r => r.value);
@@ -1013,6 +1014,22 @@ function downloadReportCSV(report) {
   a.href = url; a.download = `storydrop_${report.sessionName.replace(/\s+/g,'_')}_${report.completedAt.slice(0,10)}.csv`; a.click();
   URL.revokeObjectURL(url);
   toast('Report downloaded');
+}
+
+async function saveSetupSession() {
+  parsedVocab = parseVocab(document.getElementById('vocab-input').value);
+  const sessionName = document.getElementById('session-name').value.trim();
+  if (!sessionName) { toast('Enter a session name first', true); return; }
+  if (parsedVocab.length < 1) { toast('Add at least one vocabulary word', true); return; }
+  const tempId = genCode();
+  await saveCurrentSession(tempId, sessionName, {
+    numGroups: parseInt(document.getElementById('num-groups').value)||3,
+    numPlayers: parseInt(document.getElementById('num-players').value)||3,
+    genre: selectedGenre,
+    vocab: parsedVocab,
+    vocabRaw: document.getElementById('vocab-input').value
+  });
+  toast('Session saved!');
 }
 
 // ══════════════════════════════════════════════
@@ -1699,7 +1716,7 @@ async function loadSavedSessions() {
   const licenseKey = localStorage.getItem('storydrop_license');
   if (!licenseKey) return [];
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/store?key=like.sd_saved_session_${licenseKey}_%&select=key,value&order=value->savedAt.desc`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }});
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/store?key=like.sd_saved_session_${licenseKey}_*&select=key,value&order=value->savedAt.desc`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }});
     if (!res.ok) return [];
     const rows = await res.json();
     return rows.map(r => r.value);
