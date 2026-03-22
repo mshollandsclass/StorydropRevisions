@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>STORY DROP</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#ffffff;
@@ -607,9 +608,8 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     <div class="hdr-meta">Game Over</div>
   </div>
   <div class="content">
-    <div class="label">Winner</div>
-    <div style="font-family:'Courier Prime',monospace;font-size:clamp(2rem,8vw,4rem);color:var(--accent);letter-spacing:.06em;margin-bottom:4px" id="final-winner">—</div>
-    <div style="font-size:.7rem;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin-bottom:24px">Your teacher will receive the full story.</div>
+    <div class="label">Your Group's Story</div>
+    <div class="story-scroll" id="final-story" style="max-height:300px;margin-bottom:20px"></div>
     <div class="label">Final Scores</div>
     <div id="final-team-score" style="font-family:'Courier Prime',monospace;font-size:2.4rem;letter-spacing:.08em;color:var(--accent);margin-bottom:12px"></div>
     <table class="score-tbl" id="final-scores"></table>
@@ -751,6 +751,62 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
 
     <div class="btn-row">
       <button class="btn btn-ghost btn-md" onclick="showView('v-teacher-setup')">&#x2190; Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ANALYTICS ══════════ -->
+<div class="view" id="v-analytics">
+  <div class="hdr" style="max-width:980px;width:100%">
+    <div class="logo">STORY<br><span>DROP</span></div>
+    <div class="hdr-meta">Analytics</div>
+  </div>
+  <div class="content" style="max-width:980px;width:100%">
+    <p class="text-muted" style="margin-bottom:20px;line-height:1.7">Aggregated data across all completed sessions for your license. Identifies which words students are struggling with and shows individual performance gaps.</p>
+    <div id="analytics-session-picker" style="margin-bottom:20px"></div>
+    <div id="analytics-loading" style="color:var(--text2);font-style:italic;padding:20px 0">Loading report data…</div>
+    <div id="analytics-content" style="display:none">
+      <div class="label">Class Mastery — Trouble Word Finder</div>
+      <p class="text-muted" style="margin-bottom:16px;line-height:1.7">Percentage of students who used each word correctly. Words below 70% need re-teaching.</p>
+      <div style="background:var(--card);border:1px solid var(--border);padding:20px;margin-bottom:28px;border-radius:var(--radius)">
+        <canvas id="mastery-chart" style="width:100%;max-height:340px"></canvas>
+      </div>
+      <div class="label">Student–Word Gap Map</div>
+      <p class="text-muted" style="margin-bottom:16px;line-height:1.7">Green = used correctly · Red = incorrect or not used. Spot individual patterns and clusters of misunderstanding.</p>
+      <div style="background:var(--card);border:1px solid var(--border);padding:20px;margin-bottom:28px;border-radius:var(--radius);overflow-x:auto">
+        <div id="heatmap-container"></div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-md" onclick="showView('v-teacher-dash')">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ RESULTS PAGE ══════════ -->
+<div class="view" id="v-results-page">
+  <div class="hdr" style="max-width:980px;width:100%">
+    <div class="logo">STORY<br><span>DROP</span></div>
+    <div class="hdr-meta">Results</div>
+  </div>
+  <div class="content" style="max-width:980px;width:100%">
+    <div id="results-session-picker" style="margin-bottom:20px"></div>
+    <div id="results-loading" style="color:var(--text2);font-style:italic;padding:20px 0">Loading results…</div>
+    <div id="results-content" style="display:none">
+      <div class="label">Score Overview</div>
+      <div style="background:var(--card);border:1px solid var(--border);padding:20px;margin-bottom:24px;border-radius:var(--radius)">
+        <canvas id="scores-chart" style="width:100%;max-height:260px"></canvas>
+      </div>
+      <div class="label">Full Results Table</div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;margin-bottom:20px">
+        <table class="score-tbl" id="results-table" style="min-width:500px"></table>
+      </div>
+      <div class="btn-row" style="margin-bottom:28px">
+        <button class="btn btn-primary btn-md" onclick="downloadResultsCSV()">↓ Download CSV</button>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-md" onclick="showView('v-teacher-dash')">← Back</button>
     </div>
   </div>
 </div>
@@ -962,6 +1018,8 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
       <div style="height:1px;background:var(--border);margin:6px 0"></div>
       <div style="padding:6px 12px;font-size:1rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:4px">Go to</div>
       <button onclick="closeMenu();showView('v-starter-sentences')" class="menu-item">✏️ Customize</button>
+      <button onclick="closeMenu();showView('v-analytics')" class="menu-item">📊 Analytics</button>
+      <button onclick="closeMenu();showView('v-results-page')" class="menu-item">📋 Results</button>
       <button onclick="closeMenu();showView('v-account')" class="menu-item">👤 Account Info</button>
       <button onclick="closeMenu();showView('v-saved-sessions')" class="menu-item">📂 Saved Sessions</button>
       <button onclick="closeMenu();showReportsModal()" class="menu-item">📊 Past Reports</button>
@@ -1142,6 +1200,8 @@ function showView(id) {
   if (id === 'v-saved-sessions') showSavedSessions();
   if (id === 'v-starter-sentences') loadStarterSentences();
   if (id === 'v-teacher-setup') { loadCurrentSessionInfo(); }
+  if (id === 'v-analytics') loadAnalytics();
+  if (id === 'v-results-page') loadResultsPage();
 }
 
 function toast(msg, isErr=false) {
@@ -1806,8 +1866,20 @@ async function endGame(g) {
 
 function showFinal(g) {
   clearInterval(pollTimer);
-  const sorted = [...(g.players||[])].sort((a,b)=>(g.scores[b]||0)-(g.scores[a]||0));
-  document.getElementById('final-winner').textContent = `${sorted[0]} wins`;
+  // Show story as merged paragraph (no narrator label)
+  const storyEl = document.getElementById('final-story');
+  if (storyEl) {
+    const sentences = (g.story||[]).filter(s => s.player !== 'Narrator');
+    const narratorOpener = (g.story||[]).find(s => s.player === 'Narrator');
+    let html = '';
+    if (narratorOpener) html += `<div class="story-para"><div class="story-txt" style="font-style:italic">${narratorOpener.text}</div></div>`;
+    html += `<div class="story-para"><div class="story-txt">${sentences.map(s => {
+      const hl = s.word ? s.text.replace(new RegExp(`\\b${s.word}\\b`,'gi'), '<span class="story-hit">$&</span>') : s.text;
+      return hl;
+    }).join(' ')}</div></div>`;
+    storyEl.innerHTML = html;
+    storyEl.scrollTop = 0;
+  }
   renderScoreTable('final-scores', g.players, g.scores);
   const finalEl = document.getElementById('final-team-score');
   if (finalEl) finalEl.textContent = `Team Score: ${g.teamScore || 0} points`;
@@ -1874,13 +1946,27 @@ function renderPresentation() {
   document.getElementById('pres-dots').innerHTML = presGroups.map((_,i) => `<div class="present-dot ${i<presIdx?'done':i===presIdx?'active':''}"></div>`).join('');
   document.getElementById('pres-code').textContent = g.code;
   const verdicts = (g.results && g.results.verdicts) || [];
-  document.getElementById('pres-story').innerHTML = (g.story || []).map(para => {
-    if (para.player === 'Narrator') return `<div class="present-para" style="opacity:.55"><div class="present-author">Narrator</div><div class="present-text" style="font-style:italic">${para.text}</div></div>`;
+  const story = g.story || [];
+  const narratorOpener = story.find(p => p.player === 'Narrator');
+  const sentences = story.filter(p => p.player !== 'Narrator');
+  // Merged paragraph view
+  const mergedText = sentences.map(para => {
     const verdict = verdicts.find(v => v.playerName === para.player);
-    const hl = para.word ? para.text.replace(new RegExp(`\\b${para.word}\\b`,'gi'),'<span class="story-hit">$&</span>') : para.text;
-    const badge = !para.word ? `<span class="review-badge bad">word not used</span>` : verdict && verdict.correct ? `<span class="review-badge ok">✓ ${para.word}</span>` : verdict && !verdict.correct ? `<span class="review-badge bad">✗ ${para.word}</span>` : `<span class="review-badge na">${para.word}</span>`;
-    return `<div class="present-para"><div class="review-meta"><span class="present-author">${para.player}</span>${badge}</div><div class="present-text">${hl}</div>${verdict?`<div class="review-ai">AI: ${verdict.reason}</div>`:''}</div>`;
+    return para.word ? para.text.replace(new RegExp(`\\b${para.word}\\b`,'gi'),'<span class="story-hit">$&</span>') : para.text;
+  }).join(' ');
+  // Word verdict badges
+  const badges = sentences.filter(p => p.word).map(para => {
+    const verdict = verdicts.find(v => v.playerName === para.player);
+    const correct = verdict ? verdict.correct : null;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid ${correct===true?'var(--accent)':correct===false?'var(--red)':'var(--border)'};font-size:.8rem;margin:3px">
+      <span style="font-family:'Courier Prime',monospace;color:${correct===true?'var(--accent)':correct===false?'var(--red)':'var(--text2)'}">${correct===true?'✓':correct===false?'✗':'·'} ${para.word}</span>
+      <span style="color:var(--text2)">${para.player}</span>
+    </span>`;
   }).join('');
+  document.getElementById('pres-story').innerHTML = `
+    ${narratorOpener ? `<div class="present-para" style="opacity:.6;border-bottom:1px solid var(--border);margin-bottom:16px;padding-bottom:16px"><div class="present-text" style="font-style:italic">${narratorOpener.text}</div></div>` : ''}
+    <div class="present-para"><div class="present-text" style="font-size:clamp(1rem,2.2vw,1.3rem);line-height:2">${mergedText}</div></div>
+    ${badges ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">${badges}</div>` : ''}`;
   const scores = g.results ? (g.results.scores || g.scores) : g.scores;
   const sorted = [...(g.players||[])].sort((a,b) => (scores[b]||0)-(scores[a]||0));
   document.getElementById('pres-scores').innerHTML = `<div class="label">Group Scores</div><div style="display:flex;gap:10px;flex-wrap:wrap">${sorted.map((p,i) => `<div style="background:var(--card);border:1px solid ${i===0?'var(--accent)':'var(--border)'};padding:10px 16px;min-width:100px"><div style="font-family:'Courier Prime',monospace;font-size:1.5rem;color:var(--accent)">${scores[p]||0}</div><div style="font-size:1rem;color:var(--text2)">${p}</div></div>`).join('')}</div>`;
@@ -1993,7 +2079,7 @@ async function leaveGroup() {
 //  SETTINGS
 // ══════════════════════════════════════════════
 let settingsOpen = false;
-const TEACHER_VIEWS = ['v-teacher-dash', 'v-teacher-setup', 'v-present', 'v-account', 'v-saved-sessions', 'v-support', 'v-starter-sentences'];
+const TEACHER_VIEWS = ['v-teacher-dash', 'v-teacher-setup', 'v-present', 'v-account', 'v-saved-sessions', 'v-support', 'v-starter-sentences', 'v-analytics', 'v-results-page'];
 const GEAR_ONLY_VIEWS = ['v-landing', 'v-license', 'v-student-join', 'v-lobby', 'v-rules', 'v-write', 'v-wait', 'v-vote', 'v-ai', 'v-round-results', 'v-final', 'v-class-vote'];
 
 function updateMenuForView(viewId) {
@@ -2284,7 +2370,218 @@ async function getOpenerForGroup(genre) {
 }
 
 // ══════════════════════════════════════════════
-//  ACCOUNT INFO
+//  ANALYTICS
+// ══════════════════════════════════════════════
+let analyticsReports = [];
+let masteryChart = null;
+let scoresChart = null;
+let currentResultsReport = null;
+
+async function loadAnalytics() {
+  document.getElementById('analytics-loading').style.display = 'block';
+  document.getElementById('analytics-content').style.display = 'none';
+  analyticsReports = await loadReports();
+  if (!analyticsReports.length) {
+    document.getElementById('analytics-loading').textContent = 'No reports found. Complete a session to see analytics.';
+    return;
+  }
+  // Session picker
+  const picker = document.getElementById('analytics-session-picker');
+  picker.innerHTML = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div class="field-label">Session</div>
+    <select id="analytics-session-select" onchange="renderAnalytics()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'DM Sans',sans-serif;font-size:1rem;padding:6px 12px;border-radius:var(--radius-sm)">
+      <option value="all">All Sessions</option>
+      ${analyticsReports.map((r,i) => `<option value="${i}">${r.sessionName} (${new Date(r.completedAt).toLocaleDateString()})</option>`).join('')}
+    </select>
+  </div>`;
+  renderAnalytics();
+}
+
+function renderAnalytics() {
+  const sel = document.getElementById('analytics-session-select');
+  const idx = sel ? sel.value : 'all';
+  const reports = idx === 'all' ? analyticsReports : [analyticsReports[parseInt(idx)]];
+  // Build word mastery data
+  const wordStats = {};
+  const studentWordMap = {};
+  reports.forEach(report => {
+    (report.groups || []).forEach(g => {
+      (g.verdicts || []).forEach(v => {
+        if (!wordStats[v.word]) wordStats[v.word] = { correct: 0, total: 0 };
+        wordStats[v.word].total++;
+        if (v.correct) wordStats[v.word].correct++;
+      });
+      (g.story || []).forEach(entry => {
+        if (entry.player === 'Narrator') return;
+        const verdict = (g.verdicts || []).find(v => v.playerName === entry.player);
+        if (!studentWordMap[entry.player]) studentWordMap[entry.player] = {};
+        if (entry.word) studentWordMap[entry.player][entry.word] = verdict ? verdict.correct : false;
+      });
+    });
+  });
+  const words = Object.keys(wordStats).sort((a,b) => (wordStats[a].correct/wordStats[a].total) - (wordStats[b].correct/wordStats[b].total));
+  const pcts = words.map(w => Math.round(wordStats[w].correct / wordStats[w].total * 100));
+  const colors = pcts.map(p => p >= 70 ? 'rgba(100,200,100,0.7)' : 'rgba(100,160,220,0.7)');
+  // Bar chart
+  document.getElementById('analytics-loading').style.display = 'none';
+  document.getElementById('analytics-content').style.display = 'block';
+  if (masteryChart) masteryChart.destroy();
+  const ctx = document.getElementById('mastery-chart').getContext('2d');
+  masteryChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: words,
+      datasets: [{
+        label: '% Correct',
+        data: pcts,
+        backgroundColor: colors,
+        borderColor: colors.map(c => c.replace('0.7','1')),
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        annotation: {},
+        tooltip: { callbacks: { label: ctx => `${ctx.raw}% correct` } }
+      },
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: 'rgba(128,128,128,0.15)' } },
+        x: { ticks: { maxRotation: 45, color: '#888' }, grid: { display: false } }
+      }
+    }
+  });
+  // Draw 70% target line manually
+  const plugin = {
+    id: 'targetLine',
+    afterDraw(chart) {
+      const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+      const yPos = y.getPixelForValue(70);
+      ctx.save();
+      ctx.strokeStyle = '#cc4444';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
+      ctx.fillStyle = '#cc4444';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('Target 70%', left + 4, yPos - 6);
+      ctx.restore();
+    }
+  };
+  masteryChart.options.plugins.customPlugin = plugin;
+  Chart.register(plugin);
+  masteryChart.update();
+  // Heatmap
+  const students = Object.keys(studentWordMap);
+  const heatmapContainer = document.getElementById('heatmap-container');
+  if (!students.length) { heatmapContainer.innerHTML = '<div class="text-muted">No student data yet.</div>'; return; }
+  const cellSize = Math.max(18, Math.min(32, Math.floor(600 / words.length)));
+  let table = `<table style="border-collapse:collapse;font-size:.7rem">
+    <tr><th style="padding:4px 8px;text-align:left;color:var(--text2);white-space:nowrap;font-weight:400;min-width:100px"></th>
+    ${words.map(w => `<th style="padding:2px;writing-mode:vertical-rl;transform:rotate(180deg);color:var(--text2);font-weight:400;font-size:.65rem;height:80px;white-space:nowrap">${w}</th>`).join('')}</tr>`;
+  students.forEach(student => {
+    table += `<tr><td style="padding:4px 8px;color:var(--text2);white-space:nowrap;font-size:.75rem">${student}</td>`;
+    words.forEach(w => {
+      const val = studentWordMap[student][w];
+      const bg = val === true ? '#2d7a2d' : val === false ? '#8b1a1a' : '#333';
+      const title = val === true ? 'Correct' : val === false ? 'Incorrect' : 'No data';
+      table += `<td title="${student} — ${w}: ${title}" style="width:${cellSize}px;height:${cellSize}px;background:${bg};border:1px solid rgba(0,0,0,.15)"></td>`;
+    });
+    table += '</tr>';
+  });
+  table += '</table>';
+  heatmapContainer.innerHTML = table + `<div style="display:flex;gap:16px;margin-top:12px;font-size:.75rem;color:var(--text2)">
+    <span><span style="display:inline-block;width:12px;height:12px;background:#2d7a2d;margin-right:4px;vertical-align:middle"></span>Correct</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#8b1a1a;margin-right:4px;vertical-align:middle"></span>Incorrect</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#333;margin-right:4px;vertical-align:middle"></span>No data</span>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
+//  RESULTS PAGE
+// ══════════════════════════════════════════════
+async function loadResultsPage() {
+  document.getElementById('results-loading').style.display = 'block';
+  document.getElementById('results-content').style.display = 'none';
+  const reports = await loadReports();
+  if (!reports.length) {
+    document.getElementById('results-loading').textContent = 'No reports found. Complete a session to see results.';
+    return;
+  }
+  const picker = document.getElementById('results-session-picker');
+  picker.innerHTML = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div class="field-label">Session</div>
+    <select id="results-session-select" onchange="renderResultsPage()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'DM Sans',sans-serif;font-size:1rem;padding:6px 12px;border-radius:var(--radius-sm)">
+      ${reports.map((r,i) => `<option value="${i}">${r.sessionName} (${new Date(r.completedAt).toLocaleDateString()})</option>`).join('')}
+    </select>
+  </div>`;
+  window._resultsReports = reports;
+  renderResultsPage();
+}
+
+function renderResultsPage() {
+  const sel = document.getElementById('results-session-select');
+  if (!sel) return;
+  const report = window._resultsReports[parseInt(sel.value)];
+  currentResultsReport = report;
+  document.getElementById('results-loading').style.display = 'none';
+  document.getElementById('results-content').style.display = 'block';
+  // Build flat player list
+  const players = [];
+  (report.groups || []).forEach(g => {
+    (g.players || []).forEach(p => {
+      players.push({ name: p, group: g.code, score: (g.scores || {})[p] || 0, sentences: (g.story || []).filter(s => s.player === p) });
+    });
+  });
+  const sorted = [...players].sort((a,b) => b.score - a.score);
+  // Bar chart
+  if (scoresChart) scoresChart.destroy();
+  const ctx = document.getElementById('scores-chart').getContext('2d');
+  scoresChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(p => `${p.name} (${p.group})`),
+      datasets: [{ label: 'Score', data: sorted.map(p => p.score), backgroundColor: sorted.map((_,i) => i === 0 ? 'rgba(100,200,100,0.8)' : 'rgba(100,160,220,0.7)'), borderWidth: 1 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: 'rgba(128,128,128,0.15)' } }, x: { ticks: { maxRotation: 45, color: '#888' }, grid: { display: false } } } }
+  });
+  // Table
+  const tbl = document.getElementById('results-table');
+  tbl.innerHTML = `<thead><tr><th>Group</th><th>Player</th><th style="text-align:right">Score</th><th>Sentences Written</th></tr></thead><tbody>
+    ${sorted.map(p => `<tr>
+      <td style="font-family:'Courier Prime',monospace;color:var(--accent)">${p.group}</td>
+      <td style="font-weight:600">${p.name}</td>
+      <td style="text-align:right;font-family:'Courier Prime',monospace;font-size:1.2rem;color:var(--accent)">${p.score}</td>
+      <td style="font-size:.85rem;color:var(--text2);max-width:300px">${p.sentences.map(s => `<div style="padding:2px 0;border-bottom:1px solid var(--border)">${s.word ? `<span class="word-chip" style="font-size:.7rem;padding:1px 6px">${s.word}</span> ` : ''}${s.text}</div>`).join('') || '—'}</td>
+    </tr>`).join('')}
+  </tbody>`;
+}
+
+function downloadResultsCSV() {
+  if (!currentResultsReport) return;
+  const rows = [['Group Code', 'Player Name', 'Score', 'Sentence Written']];
+  (currentResultsReport.groups || []).forEach(g => {
+    (g.players || []).forEach(player => {
+      const score = (g.scores || {})[player] || 0;
+      const sentences = (g.story || []).filter(s => s.player === player);
+      if (!sentences.length) {
+        rows.push([g.code, player, score, '']);
+      } else {
+        sentences.forEach(s => rows.push([g.code, player, score, `"${(s.text||'').replace(/"/g,'""')}"`]));
+      }
+    });
+  });
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `storydrop_results_${(currentResultsReport.sessionName||'session').replace(/\s+/g,'_')}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded');
+}
 // ══════════════════════════════════════════════
 function loadAccountInfo() {
   const info = JSON.parse(localStorage.getItem('sd_account_info') || '{}');
