@@ -1055,18 +1055,21 @@ function genCode() {
 //  REPORTS
 // ══════════════════════════════════════════════
 async function saveReport(sessionId, sessionName, groups) {
-  const key = `sd_report_${localStorage.getItem('storydrop_license')}_${sessionId}`;
-  await sset(key, { sessionId, sessionName: sessionName || 'Unnamed Session', completedAt: new Date().toISOString(), groups: groups.map(g => ({ code: g.code, players: g.players, teamScore: g.results?.teamScore || 0, verdicts: g.results?.verdicts || [], story: g.results?.story || [], scores: g.results?.scores || {} })) });
+  const licenseKey = localStorage.getItem('storydrop_license');
+  const key = `sd_report_${encodeURIComponent(licenseKey)}_${sessionId}`;
+  const result = await sset(key, { sessionId, sessionName: sessionName || 'Unnamed Session', completedAt: new Date().toISOString(), groups: groups.map(g => ({ code: g.code, players: g.players, teamScore: g.results?.teamScore || 0, verdicts: g.results?.verdicts || [], story: g.results?.story || [], scores: g.results?.scores || {} })) });
+  if (!result) console.error('saveReport failed for session:', sessionId);
+  else console.log('Report saved:', key);
 }
 
 async function loadReports() {
   try {
     const licenseKey = localStorage.getItem('storydrop_license');
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/store?key=like.sd_report_${licenseKey}_*&select=key,value`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }});
-    if (!res.ok) return [];
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/store?key=like.sd_report_${encodeURIComponent(licenseKey)}_*&select=key,value`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }});
+    if (!res.ok) { console.error('loadReports failed:', res.status, await res.text()); return []; }
     const rows = await res.json();
     return rows.map(r => r.value);
-  } catch { return []; }
+  } catch(e) { console.error('loadReports error:', e); return []; }
 }
 
 async function showReportsModal() {
@@ -1893,7 +1896,7 @@ function toggleGenreSubject() {
 
 async function loadSubjectRow() {
   const licenseKey = localStorage.getItem('storydrop_license');
-  const saved = await sget(`sd_starters_${licenseKey}`);
+  const saved = await sget(`sd_starters_${encodeURIComponent(licenseKey)}`);
   const subjects = (saved && saved._customSubjects) || [];
   const row = document.getElementById('subject-row');
   const noMsg = document.getElementById('no-subjects-msg');
@@ -1918,7 +1921,7 @@ let ssCurrentTab = 'genres';
 
 async function loadStarterSentences() {
   const licenseKey = localStorage.getItem('storydrop_license');
-  const key = `sd_starters_${licenseKey}`;
+  const key = `sd_starters_${encodeURIComponent(licenseKey)}`;
   const saved = await sget(key);
   console.log('Loading starter sentences with key:', key, '| Result:', saved);
   ssCustomSentences = saved || {};
@@ -2050,7 +2053,7 @@ async function deleteSubjectSentence(subjectIdx, sentIdx) {
 async function saveStarterSentences() {
   const licenseKey = localStorage.getItem('storydrop_license');
   if (!licenseKey) { toast('No license key found', true); return false; }
-  const key = `sd_starters_${licenseKey}`;
+  const key = `sd_starters_${encodeURIComponent(licenseKey)}`;
   const result = await sset(key, ssCustomSentences);
   if (!result) { toast('Save failed — check connection', true); return false; }
   return true;
@@ -2058,7 +2061,7 @@ async function saveStarterSentences() {
 
 async function getOpenerForGroup(genre) {
   const licenseKey = localStorage.getItem('storydrop_license');
-  const saved = await sget(`sd_starters_${licenseKey}`);
+  const saved = await sget(`sd_starters_${encodeURIComponent(licenseKey)}`);
   const customs = saved || {};
   if (genre && genre.startsWith('custom_')) {
     const subjectName = genre.replace('custom_', '');
@@ -2097,7 +2100,7 @@ function saveAccountInfo() { const name = document.getElementById('account-name'
 async function saveCurrentSession(sessionId, sessionName, config) {
   const licenseKey = localStorage.getItem('storydrop_license');
   if (!licenseKey) return;
-  const key = `sd_saved_session_${licenseKey}_${sessionId}`;
+  const key = `sd_saved_session_${encodeURIComponent(licenseKey)}_${sessionId}`;
   await sset(key, { sessionId, sessionName, config, savedAt: new Date().toISOString() });
 }
 
@@ -2105,7 +2108,7 @@ async function loadSavedSessions() {
   const licenseKey = localStorage.getItem('storydrop_license');
   if (!licenseKey) return [];
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/store?key=like.sd_saved_session_${licenseKey}_*&select=key,value&order=value->savedAt.desc`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }});
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/store?key=like.sd_saved_session_${encodeURIComponent(licenseKey)}_*&select=key,value&order=value->savedAt.desc`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }});
     if (!res.ok) return [];
     const rows = await res.json();
     return rows.map(r => r.value);
@@ -2133,7 +2136,7 @@ function loadSession(s) {
   toast(`Session "${s.sessionName}" loaded — new codes will be generated`);
 }
 
-async function deleteSavedSession(sessionId) { if (!confirm('Delete this saved session?')) return; const licenseKey = localStorage.getItem('storydrop_license'); await sdel(`sd_saved_session_${licenseKey}_${sessionId}`); showSavedSessions(); toast('Session deleted'); }
+async function deleteSavedSession(sessionId) { if (!confirm('Delete this saved session?')) return; const licenseKey = localStorage.getItem('storydrop_license'); await sdel(`sd_saved_session_${encodeURIComponent(licenseKey)}_${sessionId}`); showSavedSessions(); toast('Session deleted'); }
 
 // ══════════════════════════════════════════════
 //  INIT
