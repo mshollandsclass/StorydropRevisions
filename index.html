@@ -1230,7 +1230,7 @@ function toast(msg, isErr=false) {
   setTimeout(() => t.className = '', 2600);
 }
 
-function renderScoreTable(tableId, players, scores) {
+function renderScoreTable(tableId, players, scores, totalPossible) {
   const sorted = [...players].sort((a,b) => (scores[b]||0) - (scores[a]||0));
   const max = Math.max(1, ...sorted.map(p => scores[p]||0));
   const el = document.getElementById(tableId);
@@ -1238,7 +1238,8 @@ function renderScoreTable(tableId, players, scores) {
   sorted.forEach((p,i) => {
     const pts = scores[p]||0;
     const pct = Math.round(pts/max*100);
-    el.innerHTML += `<tr><td><span class="score-rank ${i===0?'gold':''}">${i+1}</span></td><td><span class="score-name">${p}</span></td><td class="score-bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:${pct}%"></div></div></td><td><span class="score-pts">${pts}</span></td></tr>`;
+    const ratio = totalPossible ? ` <span style="font-size:.8rem;color:var(--text2);font-family:'DM Sans',sans-serif">/ ${totalPossible}</span>` : '';
+    el.innerHTML += `<tr><td><span class="score-rank ${i===0?'gold':''}">${i+1}</span></td><td><span class="score-name">${p}</span></td><td class="score-bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:${pct}%"></div></div></td><td><span class="score-pts">${pts}</span>${ratio}</td></tr>`;
   });
 }
 
@@ -1502,6 +1503,9 @@ async function submitTeacherReview() {
   });
   g.results = g.results || {};
   g.results.teamScore = g.teamScore;
+  // Accumulate verdicts across ALL rounds
+  g._allVerdicts = g._allVerdicts || [];
+  g._allVerdicts.push(...verdicts);
   g._roundVerdicts = verdicts;
   g.phase = 'round_results';
   await sset(`sd_group_${reviewGroupCode}`, g);
@@ -1855,19 +1859,17 @@ async function autoScoreByVote(g) {
       : false;
     verdicts.push({ playerName: c.playerName, correct, reason: 'Decided by group vote.', word: c.word.word, groupSaysCorrect: correct });
   });
-  // Score
+  // 1 point per correct word only
   g.teamScore = g.teamScore || 0;
   verdicts.forEach(v => {
-    if (v.correct) { g.teamScore += 1; g.scores[v.playerName] = (g.scores[v.playerName]||0) + 1; }
-    g.players.forEach(voter => {
-      if (voter === v.playerName) return;
-      const voteKey = `${voter}_on_${v.playerName}`;
-      const vote = g._voteMap?.[voteKey];
-      if (vote === null || vote === undefined) return;
-      if (vote === v.correct) { g.scores[voter] = (g.scores[voter]||0) + 1; g.teamScore += 1; }
-      else { g.scores[voter] = (g.scores[voter]||0) - 1; g.teamScore -= 1; }
-    });
+    if (v.correct) {
+      g.teamScore += 1;
+      g.scores[v.playerName] = (g.scores[v.playerName]||0) + 1;
+    }
   });
+  // Accumulate verdicts across ALL rounds
+  g._allVerdicts = g._allVerdicts || [];
+  g._allVerdicts.push(...verdicts);
   g.results = g.results || {};
   g.results.teamScore = g.teamScore;
   g._roundVerdicts = verdicts;
@@ -1920,7 +1922,8 @@ async function submitVote() {
 function showRoundResults(g) {
   document.getElementById('rr-round').textContent = g.currentRound;
   renderStory('rr-story', g.story);
-  renderScoreTable('rr-scores', g.players, g.scores);
+  const totalPossible = (g.vocab||[]).length;
+  renderScoreTable('rr-scores', g.players, g.scores, totalPossible);
   const teamScore = g.teamScore || 0;
   const el = document.getElementById('rr-team-score');
   if (el) el.textContent = `Team Score: ${teamScore} point${teamScore !== 1 ? 's' : ''}`;
@@ -1969,7 +1972,7 @@ function showFinal(g) {
     storyEl.innerHTML = html;
     storyEl.scrollTop = 0;
   }
-  renderScoreTable('final-scores', g.players, g.scores);
+  renderScoreTable('final-scores', g.players, g.scores, (g.vocab||[]).length);
   const finalEl = document.getElementById('final-team-score');
   if (finalEl) finalEl.textContent = `Team Score: ${g.teamScore || 0} points`;
   const words = (g.story||[]).filter(s=>s.word).map(s=>s.word);
