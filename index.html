@@ -1084,28 +1084,45 @@ async function showReportsModal() {
   const reports = await loadReports();
   const modal = document.getElementById('reports-modal');
   const list = document.getElementById('reports-list');
+  window._cachedReports = reports;
   if (!reports.length) {
     list.innerHTML = '<div style="color:var(--text2);font-size:1rem;padding:16px 0">No saved reports yet. Reports save automatically when a session completes.</div>';
   } else {
-    list.innerHTML = reports.map(r => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)"><div><div style="font-size:1rem;font-weight:600;color:var(--text)">${r.sessionName}</div><div style="font-size:1rem;color:var(--text2)">${new Date(r.completedAt).toLocaleDateString()} · ${(r.groups||[]).length} groups</div></div><button class="btn btn-primary btn-sm" onclick='downloadReportCSV(${JSON.stringify(r)})'>Download CSV</button></div>`).join('');
+    list.innerHTML = reports.map((r, i) => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)"><div><div style="font-size:1rem;font-weight:600;color:var(--text)">${r.sessionName}</div><div style="font-size:1rem;color:var(--text2)">${new Date(r.completedAt).toLocaleDateString()} · ${(r.groups||[]).length} groups</div></div><button class="btn btn-primary btn-sm" onclick="downloadReportCSV(${i})">Download CSV</button></div>`).join('');
   }
   modal.style.display = 'flex';
 }
 
-function downloadReportCSV(report) {
-  const rows = [['Session','Group Code','Player Name','Score','Round','Sentence Written','Vocab Word','Word Used','AI Verdict']];
+function downloadReportCSV(idx) {
+  const report = window._cachedReports?.[idx];
+  if (!report) { toast('Report not found', true); return; }
+  const rows = [['Session','Group Code','Player Name','Score','Round','Sentence Written','Vocab Word','Word Used','Teacher Verdict']];
   (report.groups || []).forEach(g => {
     (g.story || []).forEach(entry => {
       if (entry.player === 'Narrator') return;
       const verdict = (g.verdicts || []).find(v => v.playerName === entry.player);
-      rows.push([report.sessionName, g.code, entry.player || '', (g.scores || {})[entry.player] || 0, entry.round || '', `"${(entry.text || '').replace(/"/g, '""')}"`, entry.word || '', entry.word ? 'Yes' : 'No', verdict ? (verdict.correct ? 'Yes' : 'No') : 'N/A']);
+      rows.push([
+        `"${(report.sessionName||'').replace(/"/g,'""')}"`,
+        g.code,
+        entry.player || '',
+        (g.scores || {})[entry.player] || 0,
+        entry.round || '',
+        `"${(entry.text || '').replace(/"/g, '""')}"`,
+        entry.word || '',
+        entry.word ? 'Yes' : 'No',
+        verdict ? (verdict.correct ? 'Yes' : 'No') : 'N/A'
+      ]);
     });
   });
   const csv = rows.map(r => r.join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `storydrop_${report.sessionName.replace(/\s+/g,'_')}_${report.completedAt.slice(0,10)}.csv`; a.click();
+  a.href = url;
+  a.download = `storydrop_${(report.sessionName||'report').replace(/\s+/g,'_')}_${(report.completedAt||'').slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('Report downloaded');
 }
@@ -1890,7 +1907,6 @@ function toggleTheme() { applyTheme(localStorage.getItem('storydrop_theme')==='d
 // ══════════════════════════════════════════════
 async function restoreSession() {
   const saved = localStorage.getItem('sd_teacher_session');
-  const lastView = localStorage.getItem('sd_current_view');
   if (!saved) return;
   try {
     const { id, codes } = JSON.parse(saved);
@@ -1898,6 +1914,7 @@ async function restoreSession() {
     const session = await sget(`sd_session_${id}`);
     if (!session) { localStorage.removeItem('sd_teacher_session'); localStorage.removeItem('sd_current_view'); return; }
     teacherSessionId = id;
+    const lastView = localStorage.getItem('sd_current_view');
     const teacherViews = ['v-teacher-dash','v-present'];
     if (lastView && teacherViews.includes(lastView)) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -1905,16 +1922,7 @@ async function restoreSession() {
       window.scrollTo(0,0);
       updateMenuForView('v-teacher-dash');
       startTeacherDash(id, codes);
-      return;
     }
-    const existing = document.getElementById('restore-banner');
-    if (existing) existing.remove();
-    const banner = document.createElement('div');
-    banner.id = 'restore-banner';
-    banner.style.cssText = 'background:var(--card);border:2px solid var(--accent);padding:16px 20px;margin-top:24px;font-size:1rem;line-height:1.9;width:100%;max-width:400px;box-sizing:border-box';
-    banner.innerHTML = `<div style="font-family:'Courier Prime',monospace;font-size:1.1rem;color:var(--accent);margin-bottom:6px">⚡ Active Session</div><div style="color:var(--text2);margin-bottom:14px">${session.name||'Unnamed session'} · ${codes.length} group${codes.length!==1?'s':''}</div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="restoreTeacherDash()">Go to Dashboard →</button><button class="btn btn-secondary btn-sm" onclick="clearSavedSession()">End Session</button></div>`;
-    const grid = document.getElementById('landing-grid');
-    if (grid) grid.after(banner);
   } catch(e) { console.warn('Restore failed:', e); }
 }
 
