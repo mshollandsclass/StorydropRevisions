@@ -377,7 +377,7 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
       <span style="font-size:1rem;color:var(--text2);cursor:pointer" onclick="if(useCustomSubjects)toggleGenreSubject()">Genres</span>
       <div id="genre-subject-toggle" onclick="toggleGenreSubject()" style="width:44px;height:24px;border-radius:12px;background:var(--border-hi);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0">
-        <div id="genre-toggle-dot" style="position:absolute;width:18px;height:18px;border-radius:50%;background:var(--text);top:3px;left:3px;transition:transform .2s"></div>
+        <div id="genre-toggle-dot" style="position:absolute;width:18px;height:18px;border-radius:50%;background:#ffffff;top:3px;left:3px;transition:transform .2s,background .2s"></div>
       </div>
       <span style="font-size:1rem;color:var(--text2);cursor:pointer" onclick="if(!useCustomSubjects)toggleGenreSubject()">Custom Topics</span>
     </div>
@@ -2260,7 +2260,7 @@ function toggleGenreSubject() {
   const track = document.getElementById('genre-subject-toggle');
   const dot = document.getElementById('genre-toggle-dot');
   if (track) track.style.background = useCustomSubjects ? 'var(--accent)' : 'var(--border-hi)';
-  if (dot) dot.style.transform = useCustomSubjects ? 'translateX(20px)' : 'translateX(0)';
+  if (dot) { dot.style.transform = useCustomSubjects ? 'translateX(20px)' : 'translateX(0)'; dot.style.background = useCustomSubjects ? 'var(--bg)' : '#ffffff'; }
   document.getElementById('genre-section').style.display = useCustomSubjects ? 'none' : 'block';
   document.getElementById('subject-section').style.display = useCustomSubjects ? 'block' : 'none';
   if (useCustomSubjects) loadSubjectRow();
