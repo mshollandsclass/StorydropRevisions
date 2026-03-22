@@ -1232,17 +1232,27 @@ async function submitTeacherReview() {
     const overruled = correct !== groupSaysCorrect && definitiveVotes.length > 0;
     verdicts.push({ playerName: c.playerName, correct, reason: overruled ? 'Teacher overruled group vote.' : 'Confirmed by teacher.', word: c.word.word, groupSaysCorrect });
   }
-  // Calculate scores
+  // 1 point per correct word + vote accuracy bonus/penalty
   g.teamScore = g.teamScore || 0;
   verdicts.forEach(v => {
-    if (v.correct) { g.teamScore += 1; g.scores[v.playerName] = (g.scores[v.playerName]||0) + 1; }
-    const votes = g.wordVotes?.[v.playerName] || [];
-    votes.forEach(vote => {
-      if (vote === null) return;
-      if (vote === true && v.correct) g.teamScore += 1;
-      if (vote === true && !v.correct) g.teamScore -= 1;
-      if (vote === false && !v.correct) g.teamScore += 1;
-      if (vote === false && v.correct) g.teamScore -= 1;
+    // Word writer gets +1 if correct
+    if (v.correct) {
+      g.teamScore += 1;
+      g.scores[v.playerName] = (g.scores[v.playerName] || 0) + 1;
+    }
+    // Each voter gets +1 for correct vote, -1 for wrong vote
+    g.players.forEach(voter => {
+      if (voter === v.playerName) return; // can't vote on own word
+      const voteKey = `${voter}_on_${v.playerName}`;
+      const vote = g._voteMap?.[voteKey];
+      if (vote === null || vote === undefined) return; // abstained
+      if (vote === v.correct) {
+        g.scores[voter] = (g.scores[voter] || 0) + 1;
+        g.teamScore += 1;
+      } else {
+        g.scores[voter] = (g.scores[voter] || 0) - 1;
+        g.teamScore -= 1;
+      }
     });
   });
   g.results = g.results || {};
@@ -1454,7 +1464,6 @@ async function studentPoll() {
       if (!myVoted && curView !== 'v-vote') { startVoteTurn(g); }
       else if (myVoted && curView === 'v-vote') { showView('v-wait'); document.getElementById('wait-code').textContent = me.groupCode; document.getElementById('wait-msg').textContent = `${Object.keys(g.votes||{}).length} of ${g.players.length} players have voted…`; }
     }
-    if (phase === 'ai' && curView !== 'v-ai') startAIPhase(g);
     if (phase === 'teacher_review' && curView !== 'v-wait') {
       document.getElementById('wait-code').textContent = me.groupCode;
       document.getElementById('wait-msg').textContent = 'Waiting for your teacher to review submissions…';
@@ -1588,57 +1597,16 @@ async function submitVote() {
   if (!g) return;
   g.votes = g.votes || {}; g.votes[me.name] = 'done';
   g.wordVotes = g.wordVotes || {};
-  Object.entries(wvotes).forEach(([player, correct]) => { if (!g.wordVotes[player]) g.wordVotes[player] = []; if (correct !== null) g.wordVotes[player].push(correct); });
+  g._voteMap = g._voteMap || {};
+  Object.entries(wvotes).forEach(([player, correct]) => {
+    if (!g.wordVotes[player]) g.wordVotes[player] = [];
+    if (correct !== null) g.wordVotes[player].push(correct);
+    g._voteMap[`${me.name}_on_${player}`] = correct;
+  });
   await sset(`sd_group_${me.groupCode}`, g);
   if (g.players.every(p => g.votes[p])) { g.phase = 'teacher_review'; await sset(`sd_group_${me.groupCode}`, g); }
   showView('v-wait');
 }
-
-// ══════════════════════════════════════════════
-//  AI PHASE
-// ══════════════════════════════════════════════
-async function startAIPhase(g) {
-  showView('v-ai');
-  const needsCheck = (g.roundContribs||[]).filter(c => c.appearsInText);
-  document.getElementById('verdict-list').innerHTML = needsCheck.map(c => `<div class="verdict-card" id="vc-${c.playerName.replace(/\s/g,'_')}"><div class="verdict-name">${c.playerName}</div><div class="verdict-word">"${c.word.word}" · ${c.word.pos}</div><div class="verdict-quote">${c.text}</div><div id="vs-${c.playerName.replace(/\s/g,'_')}"><span class="thinking">Analyzing…</span></div></div>`).join('');
-  document.getElementById('ai-loading').style.display = 'block';
-  document.getElementById('ai-next-btn').style.display = 'none';
-  const verdicts = [];
-  for (const c of needsCheck) {
-    const rawVotes = g.wordVotes?.[c.playerName] || [];
-    const definitiveVotes = rawVotes.filter(v => v !== null);
-    const groupSaysCorrect = definitiveVotes.length > 0 ? definitiveVotes.filter(Boolean).length > definitiveVotes.length / 2 : false;
-    const safeKey = c.playerName.replace(/\s/g,'_');
-    try {
-      const result = await callAI(`You are judging a vocabulary game. A student was given the word "${c.word.word}" (${c.word.pos}) meaning: "${c.word.def}". They wrote:\n\n"${c.text}"\n\nDid they use "${c.word.word}" CORRECTLY? Respond ONLY with valid JSON: {"correct": true or false, "reason": "one concise sentence"}`, 200);
-      const parsed = JSON.parse((result||'{}').replace(/```json|```/g,'').trim());
-      const aiCorrect = !!parsed.correct;
-      const reason = parsed.reason || '';
-      const groupAgreed = groupSaysCorrect === aiCorrect;
-      verdicts.push({ playerName: c.playerName, correct: aiCorrect, reason, word: c.word.word, groupSaysCorrect, groupAgreed });
-      document.getElementById('vs-'+safeKey).innerHTML = `<div class="verdict-result ${aiCorrect?'ok':'bad'}">${aiCorrect?'✓ CORRECT':'✗ INCORRECT'}${!groupAgreed?`<span class="overruled">AI overrules</span>`:''}</div><div class="verdict-reason">${reason}</div>`;
-    } catch {
-      verdicts.push({ playerName: c.playerName, correct: groupSaysCorrect, reason: 'AI unavailable — group vote used.', word: c.word.word, groupSaysCorrect, groupAgreed: true });
-      document.getElementById('vs-'+safeKey).innerHTML = `<div class="verdict-result ${groupSaysCorrect?'ok':'bad'}">${groupSaysCorrect?'✓ CORRECT (group)':'✗ INCORRECT (group)'}</div><div class="verdict-reason">AI unavailable — group vote used.</div>`;
-    }
-  }
-  g.teamScore = g.teamScore || 0;
-  verdicts.forEach(v => {
-    if (v.correct) g.teamScore += 1;
-    const votes = g.wordVotes?.[v.playerName] || [];
-    votes.forEach(vote => { if (vote === null) return; if (vote === true && v.correct) g.teamScore += 1; if (vote === true && !v.correct) g.teamScore -= 1; if (vote === false && !v.correct) g.teamScore += 1; if (vote === false && v.correct) g.teamScore -= 1; });
-    if (v.correct) g.scores[v.playerName] = (g.scores[v.playerName]||0) + 1;
-  });
-  g.results = g.results || {};
-  g.results.teamScore = g.teamScore;
-  g._roundVerdicts = verdicts;
-  g.phase = 'round_results';
-  await sset(`sd_group_${me.groupCode}`, g);
-  document.getElementById('ai-loading').style.display = 'none';
-  document.getElementById('ai-next-btn').style.display = 'inline-flex';
-}
-
-async function afterAI() { const g = await sget(`sd_group_${me.groupCode}`); showRoundResults(g); }
 
 function showRoundResults(g) {
   document.getElementById('rr-round').textContent = g.currentRound;
