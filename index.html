@@ -767,7 +767,7 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     <div id="analytics-loading" style="color:var(--text2);font-style:italic;padding:20px 0">Loading report data…</div>
     <div id="analytics-content" style="display:none">
       <div class="label">Class Mastery — Trouble Word Finder</div>
-      <p class="text-muted" style="margin-bottom:16px;line-height:1.7">Percentage of students who used each word correctly. Words below 70% need re-teaching.</p>
+      <p class="text-muted" style="margin-bottom:16px;line-height:1.7">Percentage of students who used each word correctly. Words below 75% need re-teaching.</p>
       <div style="background:var(--card);border:1px solid var(--border);padding:20px;margin-bottom:28px;border-radius:var(--radius)">
         <canvas id="mastery-chart" style="width:100%;max-height:340px"></canvas>
       </div>
@@ -1283,6 +1283,16 @@ async function loadReports() {
   } catch(e) { console.error('loadReports error:', e); return []; }
 }
 
+async function deleteReport(idx) {
+  const report = window._cachedReports?.[idx];
+  if (!report) return;
+  if (!confirm(`Delete report "${report.sessionName}"? This cannot be undone.`)) return;
+  const licenseKey = localStorage.getItem('storydrop_license');
+  await sdel(`sd_report_${encodeURIComponent(licenseKey)}_${report.sessionId}`);
+  toast('Report deleted');
+  showReportsModal();
+}
+
 async function showReportsModal() {
   const reports = await loadReports();
   const modal = document.getElementById('reports-modal');
@@ -1291,7 +1301,7 @@ async function showReportsModal() {
   if (!reports.length) {
     list.innerHTML = '<div style="color:var(--text2);font-size:1rem;padding:16px 0">No saved reports yet. Reports save automatically when a session completes.</div>';
   } else {
-    list.innerHTML = reports.map((r, i) => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)"><div><div style="font-size:1rem;font-weight:600;color:var(--text)">${r.sessionName}</div><div style="font-size:1rem;color:var(--text2)">${new Date(r.completedAt).toLocaleDateString()} · ${(r.groups||[]).length} groups</div></div><button class="btn btn-primary btn-sm" onclick="downloadReportCSV(${i})">Download CSV</button></div>`).join('');
+    list.innerHTML = reports.map((r, i) => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap"><div><div style="font-size:1rem;font-weight:600;color:var(--text)">${r.sessionName}</div><div style="font-size:1rem;color:var(--text2)">${new Date(r.completedAt).toLocaleDateString()} · ${(r.groups||[]).length} groups</div></div><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="downloadReportCSV(${i})">Download CSV</button><button class="btn btn-danger btn-sm" style="color:#fff" onclick="deleteReport(${i})">Delete</button></div></div>`).join('');
   }
   modal.style.display = 'flex';
 }
@@ -2421,7 +2431,7 @@ function renderAnalytics() {
   });
   const words = Object.keys(wordStats).sort((a,b) => (wordStats[a].correct/wordStats[a].total) - (wordStats[b].correct/wordStats[b].total));
   const pcts = words.map(w => Math.round(wordStats[w].correct / wordStats[w].total * 100));
-  const colors = pcts.map(p => p >= 70 ? 'rgba(100,200,100,0.7)' : 'rgba(100,160,220,0.7)');
+  const colors = pcts.map(p => p >= 75 ? 'rgba(100,200,100,0.7)' : 'rgba(100,160,220,0.7)');
   // Bar chart
   document.getElementById('analytics-loading').style.display = 'none';
   document.getElementById('analytics-content').style.display = 'block';
@@ -2457,7 +2467,7 @@ function renderAnalytics() {
     id: 'targetLine',
     afterDraw(chart) {
       const { ctx, chartArea: { left, right }, scales: { y } } = chart;
-      const yPos = y.getPixelForValue(70);
+      const yPos = y.getPixelForValue(75);
       ctx.save();
       ctx.strokeStyle = '#cc4444';
       ctx.lineWidth = 2;
@@ -2465,7 +2475,7 @@ function renderAnalytics() {
       ctx.beginPath(); ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
       ctx.fillStyle = '#cc4444';
       ctx.font = '11px sans-serif';
-      ctx.fillText('Target 70%', left + 4, yPos - 6);
+      ctx.fillText('Target 75%', left + 4, yPos - 6);
       ctx.restore();
     }
   };
@@ -2560,16 +2570,34 @@ function renderResultsPage() {
 
 function downloadResultsCSV() {
   if (!currentResultsReport) return;
-  const rows = [['Group Code', 'Player Name', 'Score', 'Sentence Written']];
+  // Collect all unique vocab words across the session
+  const allWords = [];
+  (currentResultsReport.groups || []).forEach(g => {
+    (g.verdicts || []).forEach(v => { if (v.word && !allWords.includes(v.word)) allWords.push(v.word); });
+    (g.story || []).forEach(s => { if (s.word && !allWords.includes(s.word)) allWords.push(s.word); });
+  });
+  // Header row — Group Name instead of Class
+  const headers = ['Student Name', 'Group', ...allWords.map((w,i) => `Word_${i+1} (${w})`), 'Total Correct', 'Accuracy %', 'Incorrect Words'];
+  const rows = [headers];
   (currentResultsReport.groups || []).forEach(g => {
     (g.players || []).forEach(player => {
-      const score = (g.scores || {})[player] || 0;
-      const sentences = (g.story || []).filter(s => s.player === player);
-      if (!sentences.length) {
-        rows.push([g.code, player, score, '']);
-      } else {
-        sentences.forEach(s => rows.push([g.code, player, score, `"${(s.text||'').replace(/"/g,'""')}"`]));
-      }
+      const verdicts = g.verdicts || [];
+      const wordResults = allWords.map(word => {
+        const verdict = verdicts.find(v => v.playerName === player && v.word === word);
+        return verdict ? (verdict.correct ? 1 : 0) : '';
+      });
+      const totalCorrect = wordResults.filter(v => v === 1).length;
+      const totalJudged = wordResults.filter(v => v !== '').length;
+      const accuracy = totalJudged > 0 ? ((totalCorrect / totalJudged) * 100).toFixed(1) : '';
+      const incorrectWords = allWords.filter((w, i) => wordResults[i] === 0).map((w,i) => `Word_${allWords.indexOf(w)+1} (${w})`);
+      rows.push([
+        player,
+        g.code,
+        ...wordResults,
+        totalCorrect,
+        accuracy ? accuracy + '%' : '',
+        incorrectWords.length ? `"${incorrectWords.join(', ')}"` : ''
+      ]);
     });
   });
   const csv = rows.map(r => r.join(',')).join('\n');
@@ -2577,7 +2605,7 @@ function downloadResultsCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `storydrop_results_${(currentResultsReport.sessionName||'session').replace(/\s+/g,'_')}.csv`;
+  a.download = `storydrop_${(currentResultsReport.sessionName||'session').replace(/\s+/g,'_')}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('CSV downloaded');
@@ -2622,7 +2650,7 @@ async function showSavedSessions() {
   const sessions = await loadSavedSessions();
   window._cachedSessions = sessions;
   if (!sessions.length) { list.innerHTML = '<div class="text-muted" style="padding:20px 0">No saved sessions yet. Sessions save automatically when you create them.</div>'; return; }
-  list.innerHTML = sessions.map((s, i) => `<div class="card" style="margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-family:'Courier Prime',monospace;font-size:1.2rem;color:var(--text);letter-spacing:.04em">${s.sessionName}</div><div style="font-size:1rem;color:var(--text2);margin-top:4px">${new Date(s.savedAt).toLocaleDateString()} · ${(s.config.vocab||[]).length} words · ${s.config.genre||'horror'} · ${s.config.numGroups||3} groups · ${s.config.numPlayers||3} players/group</div></div><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="loadSessionByIndex(${i})">Load →</button><button class="btn btn-secondary btn-sm" onclick="deleteSavedSession('${s.sessionId}')">Delete</button></div></div><div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px">${(s.config.vocab||[]).slice(0,6).map(v => `<span class="word-chip">${v.word}</span>`).join('')}${(s.config.vocab||[]).length > 6 ? `<span class="text-muted">+${(s.config.vocab||[]).length-6} more</span>` : ''}</div></div>`).join('');
+  list.innerHTML = sessions.map((s, i) => `<div class="card" style="margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-family:'Courier Prime',monospace;font-size:1.2rem;color:var(--text);letter-spacing:.04em">${s.sessionName}</div><div style="font-size:1rem;color:var(--text2);margin-top:4px">${new Date(s.savedAt).toLocaleDateString()} · ${(s.config.vocab||[]).length} words · ${s.config.genre||'horror'} · ${s.config.numGroups||3} groups · ${s.config.numPlayers||3} players/group</div></div><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="loadSessionByIndex(${i})">Load →</button><button class="btn btn-danger btn-sm" style="color:#fff" onclick="deleteSavedSession('${s.sessionId}')">Delete</button></div></div><div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px">${(s.config.vocab||[]).slice(0,6).map(v => `<span class="word-chip">${v.word}</span>`).join('')}${(s.config.vocab||[]).length > 6 ? `<span class="text-muted">+${(s.config.vocab||[]).length-6} more</span>` : ''}</div></div>`).join('');
 }
 
 function loadSessionByIndex(i) { const s = window._cachedSessions?.[i]; if (!s) { toast('Session not found', true); return; } loadSession(s); }
