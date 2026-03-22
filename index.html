@@ -352,8 +352,13 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     <div class="hdr-meta">Teacher Setup</div>
   </div>
   <div class="content">
-    <div class="label">Session name</div>
-    <div class="input-row"><input type="text" id="session-name" placeholder="e.g. Period 3 — Unit 4" required maxlength="50"></div>
+    <div class="label">Current Session</div>
+    <div id="setup-current-session" style="margin-bottom:20px">
+      <div class="text-muted" style="font-size:.9rem">No active session.</div>
+    </div>
+
+    <div class="label">New Session Name</div>
+    <div class="input-row"><input type="text" id="session-name" placeholder="New Session Name" required maxlength="50"></div>
 
     <div class="label">Number of players per group</div>
     <div class="input-row" style="align-items:center;gap:16px">
@@ -399,6 +404,10 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     </div>
 
     <hr>
+    <div class="label">Saved Sessions</div>
+    <div id="setup-saved-sessions" style="margin-bottom:16px"><div class="text-muted">Loading…</div></div>
+
+    <hr>
     <div class="btn-row">
       <button class="btn btn-secondary btn-md" onclick="saveSetupSession()">&#x2713; Save</button>
       <button class="btn btn-primary btn-lg" onclick="createSession()">Start &#x2192;</button>
@@ -415,6 +424,9 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
   </div>
   <div style="width:100%;max-width:980px">
     <div class="label">Live Groups</div>
+    <div class="btn-row" style="margin-bottom:16px">
+      <button class="btn btn-primary btn-lg" id="present-btn" style="display:none" onclick="launchPresentation()">&#x25BA; Present Stories to Class</button>
+    </div>
     <div id="flag-notifications"></div>
     <div id="flag-alerts" style="margin-bottom:12px"></div>
     <div id="test-mode-bar" style="display:none;background:var(--card);border:1px solid var(--accent);padding:10px 16px;margin-bottom:12px;font-size:.78rem;color:var(--accent);gap:12px;align-items:center"><span>🤖 Test Mode Active</span> <button class="btn btn-secondary btn-sm" onclick="addTestBot()">Add Bot</button> <button class="btn btn-secondary btn-sm" onclick="runTestBots()">Run Bots</button></div>
@@ -425,7 +437,6 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     </div>
     <hr>
     <div class="btn-row">
-      <button class="btn btn-primary btn-lg" id="present-btn" style="display:none" onclick="launchPresentation()">&#x25BA; Present Stories to Class</button>
       <button class="btn btn-ghost btn-sm" onclick="showView('v-landing')">&#x2190; Exit</button>
       <button class="btn btn-ghost btn-sm" onclick="showLicenseInfo()" style="margin-left:auto">&#x2713; Licensed</button>
     </div>
@@ -991,6 +1002,7 @@ function showView(id) {
   if (id === 'v-account') loadAccountInfo();
   if (id === 'v-saved-sessions') showSavedSessions();
   if (id === 'v-starter-sentences') loadStarterSentences();
+  if (id === 'v-teacher-setup') { loadSetupSavedSessions(); loadCurrentSessionInfo(); }
 }
 
 function toast(msg, isErr=false) {
@@ -1102,6 +1114,61 @@ function downloadReportCSV(report) {
   toast('Report downloaded');
 }
 
+async function loadCurrentSessionInfo() {
+  const el = document.getElementById('setup-current-session');
+  if (!el) return;
+  const saved = localStorage.getItem('sd_teacher_session');
+  if (!saved) { el.innerHTML = '<div class="text-muted" style="font-size:.9rem">No active session.</div>'; return; }
+  try {
+    const { id, codes } = JSON.parse(saved);
+    const session = await sget(`sd_session_${id}`);
+    if (!session) { el.innerHTML = '<div class="text-muted" style="font-size:.9rem">No active session.</div>'; return; }
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--accent);border-radius:var(--radius-sm);flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-family:'Courier Prime',monospace;font-size:1.1rem;color:var(--accent)">${session.name || 'Unnamed Session'}</div>
+          <div style="font-size:.85rem;color:var(--text2);margin-top:2px">${codes.length} group${codes.length!==1?'s':''} · Codes: ${codes.join(', ')}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="restoreTeacherDash()">Go to Dashboard →</button>
+          <button class="btn btn-danger btn-sm" style="color:#fff" onclick="closeCurrentSession()">Close Session</button>
+        </div>
+      </div>`;
+  } catch { el.innerHTML = '<div class="text-muted" style="font-size:.9rem">No active session.</div>'; }
+}
+
+async function closeCurrentSession() {
+  if (!confirm('Close the current session? This will end all active groups.')) return;
+  const saved = localStorage.getItem('sd_teacher_session');
+  if (saved) {
+    try {
+      const { codes } = JSON.parse(saved);
+      if (codes) for (const code of codes) await sdel(`sd_group_${code}`);
+    } catch {}
+  }
+  clearSavedSession();
+  loadCurrentSessionInfo();
+  toast('Session closed');
+}
+
+async function loadSetupSavedSessions() {
+  const el = document.getElementById('setup-saved-sessions');
+  if (!el) return;
+  const licenseKey = localStorage.getItem('storydrop_license');
+  if (!licenseKey) { el.innerHTML = '<div class="text-muted" style="font-size:.9rem">No saved sessions yet.</div>'; return; }
+  const sessions = await loadSavedSessions();
+  if (!sessions.length) { el.innerHTML = '<div class="text-muted" style="font-size:.9rem">No saved sessions yet.</div>'; return; }
+  el.innerHTML = sessions.map((s, i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-family:'Courier Prime',monospace;font-size:1rem;color:var(--text)">${s.sessionName}</div>
+        <div style="font-size:.85rem;color:var(--text2)">${new Date(s.savedAt).toLocaleDateString()} · ${(s.config.vocab||[]).length} words · ${s.config.genre||'horror'}</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="loadSessionByIndex(${i})">Load →</button>
+    </div>`).join('');
+  window._cachedSessions = sessions;
+}
+
 async function saveSetupSession() {
   parsedVocab = parseVocab(document.getElementById('vocab-input').value);
   const sessionName = document.getElementById('session-name').value.trim();
@@ -1202,6 +1269,15 @@ async function createSession() {
   const maxPlayers = Math.min(10, Math.max(1, parseInt(document.getElementById('num-players').value)||3));
   const sessionName = document.getElementById('session-name').value.trim();
   if (!sessionName) { toast('Please enter a session name', true); return; }
+
+  // Clear old session groups from Supabase
+  const oldSession = localStorage.getItem('sd_teacher_session');
+  if (oldSession) {
+    try {
+      const { codes: oldCodes } = JSON.parse(oldSession);
+      if (oldCodes) for (const code of oldCodes) await sdel(`sd_group_${code}`);
+    } catch {}
+  }
   teacherSessionId = genCode();
   const codes = Array.from({length:n}, genCode);
   for (const code of codes) {
@@ -1286,8 +1362,7 @@ function renderDashGrid(codes, groups) {
   }).join('');
   const anyDone = Object.values(groups).some(g => g.status === 'done');
   const btn = document.getElementById('present-btn');
-  if (btn) btn.style.display = anyDone ? 'inline-flex' : 'none';
-}
+  if (btn) btn.style.display = anyDone ? 'inline-flex' : 'none';}
 
 window._savedReportCodes = window._savedReportCodes || new Set();
 
@@ -1626,6 +1701,21 @@ async function endGroupGame(code) {
   g.results = { story: g.story, scores: g.scores, teamScore: g.teamScore || 0, verdicts: g._roundVerdicts || [], wordVotes: g.wordVotes || {}, players: g.players, completedAt: Date.now() };
   await sset(`sd_group_${code}`, g);
   toast(`Group ${code} ended`);
+}
+
+async function startNewSession() {
+  if (!confirm('End current session and start a new one? This will clear all current groups.')) return;
+  clearInterval(dashPollTimer);
+  const oldSession = localStorage.getItem('sd_teacher_session');
+  if (oldSession) {
+    try {
+      const { codes: oldCodes } = JSON.parse(oldSession);
+      if (oldCodes) for (const code of oldCodes) await sdel(`sd_group_${code}`);
+    } catch {}
+  }
+  clearSavedSession();
+  showView('v-teacher-setup');
+  toast('Ready for new session');
 }
 
 async function startGroupGame(code) {
