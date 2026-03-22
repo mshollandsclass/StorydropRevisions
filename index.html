@@ -375,9 +375,11 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
 
     <div class="label">Story genre / subject</div>
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
-      <span style="font-size:1rem;color:var(--text2)">Genres</span>
-      <button class="toggle-switch" id="genre-subject-toggle" onclick="toggleGenreSubject()" aria-label="Toggle genres/subjects"></button>
-      <span style="font-size:1rem;color:var(--text2)">Custom Topics</span>
+      <span style="font-size:1rem;color:var(--text2);cursor:pointer" onclick="if(useCustomSubjects)toggleGenreSubject()">Genres</span>
+      <div id="genre-subject-toggle" onclick="toggleGenreSubject()" style="width:44px;height:24px;border-radius:12px;background:var(--border-hi);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0">
+        <div id="genre-toggle-dot" style="position:absolute;width:18px;height:18px;border-radius:50%;background:var(--text);top:3px;left:3px;transition:transform .2s"></div>
+      </div>
+      <span style="font-size:1rem;color:var(--text2);cursor:pointer" onclick="if(!useCustomSubjects)toggleGenreSubject()">Custom Topics</span>
     </div>
     <div id="genre-section">
       <div class="genre-row" id="genre-row-teacher">
@@ -2254,8 +2256,10 @@ function setJudgeMode(mode) {
 
 function toggleGenreSubject() {
   useCustomSubjects = !useCustomSubjects;
-  const toggle = document.getElementById('genre-subject-toggle');
-  if (toggle) toggle.className = 'toggle-switch' + (useCustomSubjects ? ' on' : '');
+  const track = document.getElementById('genre-subject-toggle');
+  const dot = document.getElementById('genre-toggle-dot');
+  if (track) track.style.background = useCustomSubjects ? 'var(--accent)' : 'var(--border-hi)';
+  if (dot) dot.style.transform = useCustomSubjects ? 'translateX(20px)' : 'translateX(0)';
   document.getElementById('genre-section').style.display = useCustomSubjects ? 'none' : 'block';
   document.getElementById('subject-section').style.display = useCustomSubjects ? 'block' : 'none';
   if (useCustomSubjects) loadSubjectRow();
