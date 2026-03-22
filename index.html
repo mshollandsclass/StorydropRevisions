@@ -404,10 +404,6 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     </div>
 
     <hr>
-    <div class="label">Saved Sessions</div>
-    <div id="setup-saved-sessions" style="margin-bottom:16px"><div class="text-muted">Loading…</div></div>
-
-    <hr>
     <div class="btn-row">
       <button class="btn btn-secondary btn-md" onclick="saveSetupSession()">&#x2713; Save</button>
       <button class="btn btn-primary btn-lg" onclick="createSession()">Start &#x2192;</button>
@@ -1002,7 +998,7 @@ function showView(id) {
   if (id === 'v-account') loadAccountInfo();
   if (id === 'v-saved-sessions') showSavedSessions();
   if (id === 'v-starter-sentences') loadStarterSentences();
-  if (id === 'v-teacher-setup') { loadSetupSavedSessions(); loadCurrentSessionInfo(); }
+  if (id === 'v-teacher-setup') { loadCurrentSessionInfo(); }
 }
 
 function toast(msg, isErr=false) {
@@ -1149,24 +1145,6 @@ async function closeCurrentSession() {
   clearSavedSession();
   loadCurrentSessionInfo();
   toast('Session closed');
-}
-
-async function loadSetupSavedSessions() {
-  const el = document.getElementById('setup-saved-sessions');
-  if (!el) return;
-  const licenseKey = localStorage.getItem('storydrop_license');
-  if (!licenseKey) { el.innerHTML = '<div class="text-muted" style="font-size:.9rem">No saved sessions yet.</div>'; return; }
-  const sessions = await loadSavedSessions();
-  if (!sessions.length) { el.innerHTML = '<div class="text-muted" style="font-size:.9rem">No saved sessions yet.</div>'; return; }
-  el.innerHTML = sessions.map((s, i) => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
-      <div>
-        <div style="font-family:'Courier Prime',monospace;font-size:1rem;color:var(--text)">${s.sessionName}</div>
-        <div style="font-size:.85rem;color:var(--text2)">${new Date(s.savedAt).toLocaleDateString()} · ${(s.config.vocab||[]).length} words · ${s.config.genre||'horror'}</div>
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="loadSessionByIndex(${i})">Load →</button>
-    </div>`).join('');
-  window._cachedSessions = sessions;
 }
 
 async function saveSetupSession() {
