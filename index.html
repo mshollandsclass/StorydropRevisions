@@ -394,7 +394,23 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
       <div class="text-muted" id="no-subjects-msg" style="display:none;margin-bottom:16px">No custom topics yet. Add them in <strong>Menu → Customize</strong>.</div>
     </div>
 
-    <div class="label">Vocabulary words</div>
+    <div class="label">Judging Mode</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:12px 16px;border:1px solid var(--border);border-radius:var(--radius-sm)" id="judge-mode-admin-label">
+        <input type="radio" name="judge-mode" id="judge-mode-admin" value="admin" checked onchange="setJudgeMode('admin')" style="accent-color:var(--accent);width:16px;height:16px">
+        <div>
+          <div style="font-weight:600;color:var(--text)">Educator/Admin Judging</div>
+          <div style="font-size:.85rem;color:var(--text2)">After students vote, you review each submission and confirm or override the verdict.</div>
+        </div>
+      </label>
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:12px 16px;border:1px solid var(--border);border-radius:var(--radius-sm)" id="judge-mode-student-label">
+        <input type="radio" name="judge-mode" id="judge-mode-student" value="student" onchange="setJudgeMode('student')" style="accent-color:var(--accent);width:16px;height:16px">
+        <div>
+          <div style="font-weight:600;color:var(--text)">Student Guided Only</div>
+          <div style="font-size:.85rem;color:var(--text2)">Group vote majority decides automatically. No admin review needed.</div>
+        </div>
+      </label>
+    </div>
     <div class="card" style="margin-bottom:14px">
       <div style="font-size:1.2rem;color:var(--text2);margin-bottom:10px;line-height:1.7">
         Paste your word list — one per line.<br>
@@ -1499,7 +1515,7 @@ async function createSession() {
   teacherSessionId = genCode();
   const codes = Array.from({length:n}, genCode);
   for (const code of codes) {
-    await sset(`sd_group_${code}`, { code, sessionId: teacherSessionId, sessionName, genre: selectedGenre, maxPlayers, vocab: parsedVocab, status: 'waiting', players: [], scores: {}, story: [], currentRound: 1, currentPlayerIdx: 0, roundContribs: [], votes: {}, wordVotes: {}, usedWordIndices: [], results: null, createdAt: Date.now() });
+    await sset(`sd_group_${code}`, { code, sessionId: teacherSessionId, sessionName, genre: selectedGenre, maxPlayers, vocab: parsedVocab, status: 'waiting', players: [], scores: {}, story: [], currentRound: 1, currentPlayerIdx: 0, roundContribs: [], votes: {}, wordVotes: {}, usedWordIndices: [], results: null, judgeMode, createdAt: Date.now() });
   }
   await sset(`sd_session_${teacherSessionId}`, { id: teacherSessionId, name: sessionName, codes, genre: selectedGenre, createdAt: Date.now() });
   me.role = 'teacher';
@@ -1572,11 +1588,12 @@ function renderDashGrid(codes, groups) {
       } else if (g.status === 'done') { icon = '🏁'; note = `${(g.scores||{})[p]||0} pts`; }
       return `<div style="font-size:1rem;line-height:1.8;color:var(--text)">${icon} <span style="color:var(--text2)">${p}</span> — ${note}</div>`;
     }).join('');
+    const modeLabel = g.judgeMode === 'student' ? `<div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:6px">Student Guided</div>` : `<div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:6px">Admin Judging</div>`;
     const teamScoreDisplay = g.status === 'done' && g.results ? `<div style="font-family:'Courier Prime',monospace;font-size:1.3rem;color:var(--accent);margin-top:6px">${g.results.teamScore || 0} team pts</div>` : '';
     const startBtn = g.status === 'waiting' && (g.players||[]).length >= 1 ? `<button class="btn btn-primary btn-sm" onclick="startGroupGame('${code}')">Start ▶</button>` : '';
     const endBtn = g.status === 'playing' ? `<button class="btn btn-danger btn-sm" style="color:#ffffff" onclick="endGroupGame('${code}')">End Game ■</button>` : '';
     const reviewBtn = needsReview ? `<button class="btn btn-primary btn-sm" onclick="openTeacherReview('${code}')">Review Submissions →</button>` : '';
-    return `<div class="group-card ${cls}" ${needsReview?'style="border-color:var(--accent);border-width:2px"':''}><div><div class="gc-code">${code}</div><div class="gc-status ${cls}">${statusLabel}</div><div class="gc-players">${playerStatuses}</div>${teamScoreDisplay}</div><div style="display:flex;flex-direction:column;gap:6px;padding-top:10px">${startBtn}${reviewBtn}${endBtn}</div></div>`;
+    return `<div class="group-card ${cls}" ${needsReview?'style="border-color:var(--accent);border-width:2px"':''}><div><div class="gc-code">${code}</div><div class="gc-status ${cls}">${statusLabel}</div>${modeLabel}<div class="gc-players">${playerStatuses}</div>${teamScoreDisplay}</div><div style="display:flex;flex-direction:column;gap:6px;padding-top:10px">${startBtn}${reviewBtn}${endBtn}</div></div>`;
   }).join('');
   const anyDone = Object.values(groups).some(g => g.status === 'done');
   const btn = document.getElementById('present-btn');
@@ -1803,6 +1820,41 @@ async function doSubmitWrite(txt) {
 // ══════════════════════════════════════════════
 //  VOTE TURN
 // ══════════════════════════════════════════════
+async function autoScoreByVote(g) {
+  const needsCheck = (g.roundContribs||[]).filter(c => c.round === g.currentRound);
+  const verdicts = [];
+  needsCheck.forEach(c => {
+    if (!c.appearsInText) {
+      verdicts.push({ playerName: c.playerName, correct: false, reason: 'Word not used.', word: c.word.word });
+      return;
+    }
+    const rawVotes = g.wordVotes?.[c.playerName] || [];
+    const definitiveVotes = rawVotes.filter(v => v !== null);
+    const correct = definitiveVotes.length > 0
+      ? definitiveVotes.filter(Boolean).length > definitiveVotes.length / 2
+      : false;
+    verdicts.push({ playerName: c.playerName, correct, reason: 'Decided by group vote.', word: c.word.word, groupSaysCorrect: correct });
+  });
+  // Score
+  g.teamScore = g.teamScore || 0;
+  verdicts.forEach(v => {
+    if (v.correct) { g.teamScore += 1; g.scores[v.playerName] = (g.scores[v.playerName]||0) + 1; }
+    g.players.forEach(voter => {
+      if (voter === v.playerName) return;
+      const voteKey = `${voter}_on_${v.playerName}`;
+      const vote = g._voteMap?.[voteKey];
+      if (vote === null || vote === undefined) return;
+      if (vote === v.correct) { g.scores[voter] = (g.scores[voter]||0) + 1; g.teamScore += 1; }
+      else { g.scores[voter] = (g.scores[voter]||0) - 1; g.teamScore -= 1; }
+    });
+  });
+  g.results = g.results || {};
+  g.results.teamScore = g.teamScore;
+  g._roundVerdicts = verdicts;
+  g.phase = 'round_results';
+  await sset(`sd_group_${me.groupCode}`, g);
+}
+
 async function startVoteTurn(g) {
   myVote = 'done'; myWordVotes = {};
   const others = (g.roundContribs||[]).filter(c => c.playerName !== me.name && (c.round === g.currentRound || c.round == null));
@@ -1834,7 +1886,14 @@ async function submitVote() {
     g._voteMap[`${me.name}_on_${player}`] = correct;
   });
   await sset(`sd_group_${me.groupCode}`, g);
-  if (g.players.every(p => g.votes[p])) { g.phase = 'teacher_review'; await sset(`sd_group_${me.groupCode}`, g); }
+  if (g.players.every(p => g.votes[p])) {
+    if (g.judgeMode === 'student') {
+      await autoScoreByVote(g);
+    } else {
+      g.phase = 'teacher_review';
+      await sset(`sd_group_${me.groupCode}`, g);
+    }
+  }
   showView('v-wait');
 }
 
@@ -2183,7 +2242,15 @@ async function exportCSV() {
 // ══════════════════════════════════════════════
 //  GENRE / SUBJECT TOGGLE (SETUP PAGE)
 // ══════════════════════════════════════════════
-let useCustomSubjects = false;
+let judgeMode = 'admin'; // 'admin' or 'student'
+
+function setJudgeMode(mode) {
+  judgeMode = mode;
+  const adminLabel = document.getElementById('judge-mode-admin-label');
+  const studentLabel = document.getElementById('judge-mode-student-label');
+  if (adminLabel) adminLabel.style.borderColor = mode === 'admin' ? 'var(--accent)' : 'var(--border)';
+  if (studentLabel) studentLabel.style.borderColor = mode === 'student' ? 'var(--accent)' : 'var(--border)';
+}
 
 function toggleGenreSubject() {
   useCustomSubjects = !useCustomSubjects;
