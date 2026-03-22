@@ -1302,6 +1302,17 @@ async function loadReports() {
   } catch(e) { console.error('loadReports error:', e); return []; }
 }
 
+async function clearAllReports() {
+  if (!confirm('Delete ALL reports? This cannot be undone.')) return;
+  const licenseKey = localStorage.getItem('storydrop_license');
+  const reports = window._cachedReports || [];
+  for (const r of reports) {
+    await sdel(`sd_report_${encodeURIComponent(licenseKey)}_${r.sessionId}`);
+  }
+  toast('All reports cleared');
+  showReportsModal();
+}
+
 async function deleteReport(idx) {
   const report = window._cachedReports?.[idx];
   if (!report) return;
@@ -1320,7 +1331,9 @@ async function showReportsModal() {
   if (!reports.length) {
     list.innerHTML = '<div style="color:var(--text2);font-size:1rem;padding:16px 0">No saved reports yet. Reports save automatically when a session completes.</div>';
   } else {
-    list.innerHTML = reports.map((r, i) => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap"><div><div style="font-size:1rem;font-weight:600;color:var(--text)">${r.sessionName}</div><div style="font-size:1rem;color:var(--text2)">${new Date(r.completedAt).toLocaleDateString()} · ${(r.groups||[]).length} groups</div></div><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="downloadReportCSV(${i})">Download CSV</button><button class="btn btn-danger btn-sm" style="color:#fff" onclick="deleteReport(${i})">Delete</button></div></div>`).join('');
+    list.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button class="btn btn-danger btn-sm" style="color:#fff" onclick="clearAllReports()">Clear All Reports</button>
+    </div>` + reports.map((r, i) => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap"><div><div style="font-size:1rem;font-weight:600;color:var(--text)">${r.sessionName}</div><div style="font-size:1rem;color:var(--text2)">${new Date(r.completedAt).toLocaleDateString()} · ${(r.groups||[]).length} groups</div></div><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="downloadReportCSV(${i})">Download CSV</button><button class="btn btn-danger btn-sm" style="color:#fff" onclick="deleteReport(${i})">Delete</button></div></div>`).join('');
   }
   modal.style.display = 'flex';
 }
