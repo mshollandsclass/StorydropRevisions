@@ -2740,7 +2740,14 @@ function loadSession(s) {
   toast(`Session "${s.sessionName}" loaded — new codes will be generated`);
 }
 
-async function deleteSavedSession(sessionId) { if (!confirm('Delete this saved session?')) return; const licenseKey = localStorage.getItem('storydrop_license'); await sdel(`sd_saved_session_${encodeURIComponent(licenseKey)}_${sessionId}`); showSavedSessions(); toast('Session deleted'); }
+async function deleteSavedSession(sessionId) {
+  if (!confirm('Delete this saved session and its report data?')) return;
+  const licenseKey = localStorage.getItem('storydrop_license');
+  await sdel(`sd_saved_session_${encodeURIComponent(licenseKey)}_${sessionId}`);
+  await sdel(`sd_report_${encodeURIComponent(licenseKey)}_${sessionId}`);
+  showSavedSessions();
+  toast('Session deleted');
+}
 
 // ══════════════════════════════════════════════
 //  INIT
