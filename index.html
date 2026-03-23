@@ -1481,28 +1481,13 @@ async function submitTeacherReview() {
     const overruled = correct !== groupSaysCorrect && definitiveVotes.length > 0;
     verdicts.push({ playerName: c.playerName, correct, reason: overruled ? 'Admin overruled group vote.' : 'Confirmed by Admin.', word: c.word.word, groupSaysCorrect });
   }
-  // 1 point per correct word + vote accuracy bonus/penalty
+  // 1 point per correct word only
   g.teamScore = g.teamScore || 0;
   verdicts.forEach(v => {
-    // Word writer gets +1 if correct
     if (v.correct) {
       g.teamScore += 1;
       g.scores[v.playerName] = (g.scores[v.playerName] || 0) + 1;
     }
-    // Each voter gets +1 for correct vote, -1 for wrong vote
-    g.players.forEach(voter => {
-      if (voter === v.playerName) return; // can't vote on own word
-      const voteKey = `${voter}_on_${v.playerName}`;
-      const vote = g._voteMap?.[voteKey];
-      if (vote === null || vote === undefined) return; // abstained
-      if (vote === v.correct) {
-        g.scores[voter] = (g.scores[voter] || 0) + 1;
-        g.teamScore += 1;
-      } else {
-        g.scores[voter] = (g.scores[voter] || 0) - 1;
-        g.teamScore -= 1;
-      }
-    });
   });
   g.results = g.results || {};
   g.results.teamScore = g.teamScore;
@@ -2692,7 +2677,7 @@ function downloadResultsCSV() {
     (g.story || []).forEach(s => { if (s.word && !allWords.includes(s.word)) allWords.push(s.word); });
   });
   // Header row — Group Name instead of Class
-  const headers = ['Student Name', 'Group', ...allWords.map((w,i) => `Word_${i+1} (${w})`), 'Total Correct', 'Accuracy %', 'Incorrect Words'];
+  const headers = ['Student Name', 'Group', ...allWords, 'Total Correct', 'Accuracy %'];
   const rows = [headers];
   (currentResultsReport.groups || []).forEach(g => {
     (g.players || []).forEach(player => {
@@ -2704,14 +2689,12 @@ function downloadResultsCSV() {
       const totalCorrect = wordResults.filter(v => v === 1).length;
       const totalJudged = wordResults.filter(v => v !== '').length;
       const accuracy = totalJudged > 0 ? ((totalCorrect / totalJudged) * 100).toFixed(1) : '';
-      const incorrectWords = allWords.filter((w, i) => wordResults[i] === 0).map((w,i) => `Word_${allWords.indexOf(w)+1} (${w})`);
       rows.push([
         player,
         g.code,
         ...wordResults,
         totalCorrect,
-        accuracy ? accuracy + '%' : '',
-        incorrectWords.length ? `"${incorrectWords.join(', ')}"` : ''
+        accuracy ? accuracy + '%' : ''
       ]);
     });
   });
