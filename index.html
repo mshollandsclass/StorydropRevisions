@@ -1536,7 +1536,7 @@ function startTeacherDash(sessionId, codes) {
   if (typeof codes === 'string') { try { codes = JSON.parse(codes); } catch {} }
   clearInterval(dashPollTimer);
   renderDashGrid(codes, {});
-  dashPollTimer = setInterval(() => { pollDash(codes); pollFlags(); }, 4000);
+  dashPollTimer = setInterval(() => { pollDash(codes); }, 4000);
   pollDash(codes);
 }
 
@@ -1569,6 +1569,8 @@ async function pollDash(codes) {
   for (const code of codes) { const g = await sget(`sd_group_${code}`); if (g) groups[code] = g; }
   renderDashGrid(codes, groups);
   renderDashResults(groups);
+  const allDone = codes.length > 0 && codes.every(c => groups[c]?.status === 'done');
+  if (allDone) { clearInterval(dashPollTimer); toast('All groups complete'); }
 }
 
 function renderDashGrid(codes, groups) {
@@ -1704,7 +1706,7 @@ async function studentPoll() {
     }
     if (phase === 'round_results' && curView !== 'v-round-results') showRoundResults(g);
   }
-  if (g.status === 'done') { if (curView !== 'v-final') showFinal(g); }
+  if (g.status === 'done') { if (curView !== 'v-final') showFinal(g); clearInterval(pollTimer); return; }
 }
 
 // ══════════════════════════════════════════════
@@ -1994,6 +1996,7 @@ async function startNewSession() {
 async function startGroupGame(code) {
   const g = await sget(`sd_group_${code}`);
   if (!g || g.players.length < 1) { toast('Need at least 1 player to start', true); return; }
+  toast(`Starting group ${code}…`);
   const opener = await getOpenerForGroup(g.genre);
   g.status = 'playing'; g.phase = 'write';
   g.story = [{ player: 'Narrator', text: opener, word: null }];
@@ -2442,23 +2445,25 @@ async function saveStarterSentences() {
 }
 
 async function getOpenerForGroup(genre) {
-  const licenseKey = localStorage.getItem('storydrop_license');
-  const saved = await sget(`sd_starters_${normalizeLicenseKey(licenseKey)}`);
-  const customs = saved || {};
-  if (genre && genre.startsWith('custom_')) {
-    const subjectName = genre.replace('custom_', '');
-    const subjects = customs._customSubjects || [];
-    const subject = subjects.find(s => s.name === subjectName);
-    const sentences = (subject && subject.sentences) || [];
-    if (sentences.length) return sentences[Math.floor(Math.random() * sentences.length)];
-    return getOpener('horror');
-  }
-  const removedIdxs = new Set(customs[`${genre}_defaults_removed`] || []);
-  const defaults = (GENRE_OPENERS[genre] || []).filter((_, i) => !removedIdxs.has(i));
-  const custom = customs[genre] || [];
-  const all = [...defaults, ...custom];
-  if (!all.length) return getOpener(genre);
-  return all[Math.floor(Math.random() * all.length)];
+  try {
+    const licenseKey = localStorage.getItem('storydrop_license');
+    const saved = await sget(`sd_starters_${normalizeLicenseKey(licenseKey)}`);
+    const customs = saved || {};
+    if (genre && genre.startsWith('custom_')) {
+      const subjectName = genre.replace('custom_', '');
+      const subjects = customs._customSubjects || [];
+      const subject = subjects.find(s => s.name === subjectName);
+      const sentences = (subject && subject.sentences) || [];
+      if (sentences.length) return sentences[Math.floor(Math.random() * sentences.length)];
+      return getOpener('horror');
+    }
+    const removedIdxs = new Set(customs[`${genre}_defaults_removed`] || []);
+    const defaults = (GENRE_OPENERS[genre] || []).filter((_, i) => !removedIdxs.has(i));
+    const custom = customs[genre] || [];
+    const all = [...defaults, ...custom];
+    if (all.length) return all[Math.floor(Math.random() * all.length)];
+  } catch {}
+  return getOpener(genre);
 }
 
 // ══════════════════════════════════════════════
