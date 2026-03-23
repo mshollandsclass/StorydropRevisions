@@ -2079,6 +2079,7 @@ function presNav(dir) { presIdx = Math.max(0, Math.min(presGroups.length-1, pres
 // ══════════════════════════════════════════════
 //  LICENSE
 // ══════════════════════════════════════════════
+function isLicensed() { return !!localStorage.getItem('storydrop_license'); }
 function normalizeLicenseKey(key) {
   // Strip special chars so the key is safe for Supabase LIKE queries
   return (key || '').replace(/[^a-zA-Z0-9]/g, '_');
