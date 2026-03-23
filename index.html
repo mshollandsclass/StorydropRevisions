@@ -1813,9 +1813,14 @@ async function doSubmitWrite(txt) {
     g.phase = g.players.length === 1 ? 'teacher_review' : 'vote';
   }
   await sset(`sd_group_${me.groupCode}`, g);
-  document.getElementById('wait-code').textContent = me.groupCode;
-  document.getElementById('wait-msg').textContent = 'Waiting for other players to finish writing…';
-  showView('v-wait');
+  // If all players have now written, go straight to vote — don't wait for poll
+  if (g.phase === 'vote') {
+    await startVoteTurn(g);
+  } else {
+    document.getElementById('wait-code').textContent = me.groupCode;
+    document.getElementById('wait-msg').textContent = 'Waiting for other players to finish writing…';
+    showView('v-wait');
+  }
 }
 
 // ══════════════════════════════════════════════
