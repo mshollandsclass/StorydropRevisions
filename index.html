@@ -393,7 +393,7 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     </div>
     <div id="subject-section" style="display:none">
       <div class="genre-row" id="subject-row"></div>
-      <div class="text-muted" id="no-subjects-msg" style="display:none;margin-bottom:16px">No custom topics yet. Add them in <strong>Menu → Customize</strong>.</div>
+      <div class="text-muted" id="no-subjects-msg" style="display:none;margin-bottom:16px">No custom topics yet. Add them in <strong>Menu → Edit Vocab</strong>.</div>
     </div>
 
     <div class="label">Judging Mode</div>
@@ -716,7 +716,7 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
 <div class="view" id="v-starter-sentences">
   <div class="hdr" style="max-width:780px;width:100%">
     <div class="logo">STORY<br><span>DROP</span></div>
-    <div class="hdr-meta">Starter Sentences</div>
+    <div class="hdr-meta">Edit Vocab</div>
   </div>
   <div class="content" style="max-width:780px;width:100%">
 
@@ -821,6 +821,7 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
       </div>
       <div class="btn-row" style="margin-bottom:28px">
         <button class="btn btn-primary btn-md" onclick="downloadResultsCSV()">↓ Download CSV</button>
+        <button class="btn btn-danger btn-sm" style="color:#fff" onclick="deleteCurrentReport()">Delete Report</button>
       </div>
     </div>
     <div class="btn-row">
@@ -1035,12 +1036,12 @@ hr{border:none;border-top:1px solid var(--border);margin:22px 0}
     <div id="menu-teacher-section" style="display:none">
       <div style="height:1px;background:var(--border);margin:6px 0"></div>
       <div style="padding:6px 12px;font-size:1rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:4px">Go to</div>
-      <button onclick="closeMenu();showView('v-starter-sentences')" class="menu-item">✏️ Customize</button>
+      <button onclick="closeMenu();showView('v-account')" class="menu-item">👤 Account Info</button>
+      <button onclick="closeMenu();showView('v-starter-sentences')" class="menu-item">✏️ Edit Vocab</button>
       <button onclick="closeMenu();showView('v-analytics')" class="menu-item">📊 Analytics</button>
       <button onclick="closeMenu();showView('v-results-page')" class="menu-item">📋 Results</button>
-      <button onclick="closeMenu();showView('v-account')" class="menu-item">👤 Account Info</button>
       <button onclick="closeMenu();showView('v-saved-sessions')" class="menu-item">📂 Saved Sessions</button>
-      <button onclick="closeMenu();showReportsModal()" class="menu-item">📊 Past Reports</button>
+
       <button onclick="closeMenu();showView('v-support')" class="menu-item">🛟 Support</button>
       <div style="height:1px;background:var(--border);margin:6px 0"></div>
       <div style="padding:6px 12px;font-size:1rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:4px">Teacher</div>
@@ -2667,6 +2668,15 @@ function renderResultsPage() {
       <td style="font-size:.85rem;color:var(--text2);max-width:300px">${p.sentences.map(s => `<div style="padding:2px 0;border-bottom:1px solid var(--border)">${s.word ? `<span class="word-chip" style="font-size:.7rem;padding:1px 6px">${s.word}</span> ` : ''}${s.text}</div>`).join('') || '—'}</td>
     </tr>`).join('')}
   </tbody>`;
+}
+
+async function deleteCurrentReport() {
+  if (!currentResultsReport) return;
+  if (!confirm(`Delete report "${currentResultsReport.sessionName}"? This cannot be undone.`)) return;
+  const licenseKey = localStorage.getItem('storydrop_license');
+  await sdel(`sd_report_${encodeURIComponent(licenseKey)}_${currentResultsReport.sessionId}`);
+  toast('Report deleted');
+  loadResultsPage();
 }
 
 function downloadResultsCSV() {
