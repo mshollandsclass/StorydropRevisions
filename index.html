@@ -1071,28 +1071,21 @@ const ANTHROPIC_KEY = 'YOUR_ANTHROPIC_KEY_HERE';
 const USE_PHP_PROXY = ANTHROPIC_KEY === 'YOUR_ANTHROPIC_KEY_HERE';
 const AI_ENDPOINT = USE_PHP_PROXY ? '/api/api.php' : 'https://api.anthropic.com/v1/messages';
 
-function fetchWithTimeout(url, options, ms = 4000) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timeout));
-}
-
 async function sget(key) {
   try {
-    const res = await fetchWithTimeout(
+    const res = await fetch(
       `${SUPABASE_URL}/rest/v1/store?key=eq.${encodeURIComponent(key)}&select=value`,
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
     );
-    if (!res.ok) { console.error('sget failed:', res.status); return null; }
+    if (!res.ok) return null;
     const rows = await res.json();
     return rows.length ? rows[0].value : null;
-  } catch(e) { console.error('sget error:', e.name); return null; }
+  } catch { return null; }
 }
 
 async function sset(key, val) {
   try {
-    const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/store`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/store`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -1102,14 +1095,13 @@ async function sset(key, val) {
       },
       body: JSON.stringify({ key, value: val, updated_at: new Date().toISOString() })
     });
-    if (!res.ok) { console.error('sset failed:', res.status); return false; }
-    return true;
-  } catch(e) { console.error('sset error:', e.name); return false; }
+    return res.ok;
+  } catch { return false; }
 }
 
 async function sdel(key) {
   try {
-    await fetchWithTimeout(
+    await fetch(
       `${SUPABASE_URL}/rest/v1/store?key=eq.${encodeURIComponent(key)}`,
       { method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
     );
@@ -1544,7 +1536,7 @@ function startTeacherDash(sessionId, codes) {
   if (typeof codes === 'string') { try { codes = JSON.parse(codes); } catch {} }
   clearInterval(dashPollTimer);
   renderDashGrid(codes, {});
-  dashPollTimer = setInterval(() => { pollDash(codes); pollFlags(); }, 2500);
+  dashPollTimer = setInterval(() => { pollDash(codes); pollFlags(); }, 4000);
   pollDash(codes);
 }
 
@@ -1676,7 +1668,7 @@ async function rulesGotIt() {
 
 function showJoinError(msg) { const el = document.getElementById('join-error'); el.textContent = msg; el.style.display = 'block'; }
 
-function startStudentPoll() { clearInterval(pollTimer); pollTimer = setInterval(studentPoll, 2000); studentPoll(); }
+function startStudentPoll() { clearInterval(pollTimer); pollTimer = setInterval(studentPoll, 3000); studentPoll(); }
 
 async function studentPoll() {
   const g = await sget(`sd_group_${me.groupCode}`);
@@ -1705,14 +1697,9 @@ async function studentPoll() {
       if (!myVoted && curView !== 'v-vote') { startVoteTurn(g); }
       else if (myVoted && curView === 'v-vote') { showView('v-wait'); document.getElementById('wait-code').textContent = me.groupCode; document.getElementById('wait-msg').textContent = `${Object.keys(g.votes||{}).length} of ${g.players.length} players have voted…`; }
     }
-    if (phase === 'teacher_review' && curView !== 'v-wait') {
+    if ((phase === 'teacher_review' || phase === 'scoring') && curView !== 'v-wait') {
       document.getElementById('wait-code').textContent = me.groupCode;
-      document.getElementById('wait-msg').textContent = 'Waiting for your Educator/Admin to review submissions…';
-      showView('v-wait');
-    }
-    if (phase === 'scoring' && curView !== 'v-wait') {
-      document.getElementById('wait-code').textContent = me.groupCode;
-      document.getElementById('wait-msg').textContent = 'Calculating scores…';
+      document.getElementById('wait-msg').textContent = phase === 'scoring' ? 'Calculating scores…' : 'Waiting for your Educator/Admin to review submissions…';
       showView('v-wait');
     }
     if (phase === 'round_results' && curView !== 'v-round-results') showRoundResults(g);
@@ -1833,9 +1820,6 @@ async function doSubmitWrite(txt) {
 //  VOTE TURN
 // ══════════════════════════════════════════════
 async function autoScoreByVote(g) {
-  // Guard — re-fetch to confirm we're still in scoring phase
-  const fresh = await sget(`sd_group_${me.groupCode}`);
-  if (!fresh || fresh.phase !== 'scoring') return;
   const needsCheck = (g.roundContribs||[]).filter(c => c.round === g.currentRound);
   const verdicts = [];
   needsCheck.forEach(c => {
@@ -1904,14 +1888,12 @@ async function submitVote() {
     g._voteMap[`${me.name}_on_${player}`] = correct;
   });
   await sset(`sd_group_${me.groupCode}`, g);
-  const allVoted = g.players.every(p => g.votes[p]);
-  if (allVoted) {
-    // Set phase immediately to prevent other players triggering this too
-    g.phase = g.judgeMode === 'student' ? 'scoring' : 'teacher_review';
-    await sset(`sd_group_${me.groupCode}`, g);
-    if (g.judgeMode === 'student') {
-      await autoScoreByVote(g);
-    }
+  // Re-fetch to get the latest votes from all players before deciding
+  const latest = await sget(`sd_group_${me.groupCode}`);
+  if (latest && latest.players.every(p => latest.votes?.[p]) && latest.phase === 'vote') {
+    latest.phase = g.judgeMode === 'student' ? 'scoring' : 'teacher_review';
+    await sset(`sd_group_${me.groupCode}`, latest);
+    if (g.judgeMode === 'student') await autoScoreByVote(latest);
   }
   showView('v-wait');
 }
