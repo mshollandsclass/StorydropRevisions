@@ -1452,9 +1452,15 @@ async function openTeacherReview(code) {
   document.getElementById('review-modal-status').textContent = '';
   document.getElementById('review-modal-list').innerHTML = needsCheck.map((c, i) => {
     const rawVotes = g.wordVotes?.[c.playerName] || [];
+    const allVoterKeys = Object.keys(g._voteMap || {}).filter(k => k.endsWith(`_on_${c.playerName}`));
+    const yesCount = rawVotes.filter(v => v === true).length;
+    const noCount = rawVotes.filter(v => v === false).length;
+    const abstainCount = allVoterKeys.length - rawVotes.length;
     const definitiveVotes = rawVotes.filter(v => v !== null);
     const groupSaysCorrect = definitiveVotes.length > 0 ? definitiveVotes.filter(Boolean).length > definitiveVotes.length / 2 : null;
-    const groupLabel = definitiveVotes.length === 0 ? 'No votes' : groupSaysCorrect ? 'Group voted: ✓ Correct' : 'Group voted: ✗ Incorrect';
+    const groupLabel = allVoterKeys.length === 0
+      ? 'No votes recorded'
+      : `Group voted: <strong style="color:var(--accent)">✓ ${yesCount} Yes</strong> · <strong style="color:var(--red)">✗ ${noCount} No</strong> · <span style="color:var(--text2)">? ${abstainCount} Not sure</span>`;
     const hl = c.appearsInText ? c.text.replace(new RegExp(`\\b${c.word.word}\\b`,'gi'), '<span class="story-hit">$&</span>') : c.text;
     return `<div style="border:1px solid var(--border);padding:16px;margin-bottom:14px;border-radius:var(--radius-sm)">
       <div style="font-family:'Courier Prime',monospace;font-size:1.1rem;color:var(--accent);margin-bottom:4px">${c.playerName}</div>
